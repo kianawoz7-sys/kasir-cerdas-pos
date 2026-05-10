@@ -35,6 +35,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deleteConfirmTrx, setDeleteConfirmTrx] = useState<Transaksi | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const filteredHistory = history.filter(trx =>
@@ -63,16 +64,22 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
       .map(([month, data]) => ({ month, ...data }));
   }, [history]);
 
-  const handleDelete = async (trx: Transaksi) => {
-    const isConfirmed = await customConfirm('Hapus transaksi ini dari riwayat permanen? Stok barang akan dikembalikan.');
-    if (isConfirmed) {
-      try {
-        await posService.deleteTransaksi(trx);
-        toast.success('Berhasil dihapus');
-        onDelete();
-      } catch (error) {
-        toast.error('Gagal menghapus');
-      }
+  const handleDelete = (trx: Transaksi) => {
+    setDeleteConfirmTrx(trx);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmTrx) return;
+    const loadingToast = toast.loading('Menghapus transaksi...');
+    try {
+      await posService.deleteTransaksi(deleteConfirmTrx);
+      toast.dismiss(loadingToast);
+      toast.success('Transaksi berhasil dihapus!');
+      setDeleteConfirmTrx(null);
+      onDelete();
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      toast.error('Gagal menghapus transaksi');
     }
   };
 
@@ -388,6 +395,51 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
           )}
         </div>
       </motion.div>
+
+      {/* Modal Konfirmasi Hapus Tengah Layar (Custom Dialog) */}
+      <AnimatePresence>
+        {deleteConfirmTrx && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm flex flex-col gap-6 shadow-2xl border border-slate-100"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-100">
+                  <Trash2 className="w-8 h-8 text-rose-500" />
+                </div>
+                <h3 className="font-black text-lg uppercase tracking-wider text-rose-500 mb-1">Hapus Transaksi?</h3>
+                <p className="text-[10px] font-black text-slate-400 tracking-widest mb-3">#{deleteConfirmTrx.no_transaksi}</p>
+                <p className="text-xs font-bold text-slate-500 leading-relaxed px-2">
+                  Apakah Anda yakin ingin menghapus permanen? Stok barang akan otomatis dikembalikan ke gudang.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirmTrx(null)}
+                  className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border border-slate-200"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 py-4 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/30"
+                >
+                  Ya, Hapus
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

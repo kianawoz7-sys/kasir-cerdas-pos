@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Toaster, toast } from 'react-hot-toast';
+import { Toaster, toast, useToasterStore } from 'react-hot-toast';
 import {
   Package,
   ShoppingCart,
@@ -28,6 +28,15 @@ import { InventoryModal } from './components/InventoryModal';
 import { HistoryModal } from './components/HistoryModal';
 
 export default function App() {
+  const { toasts } = useToasterStore();
+
+  useEffect(() => {
+    toasts
+      .filter((t) => t.visible)
+      .filter((_, i) => i >= 1)
+      .forEach((t) => toast.dismiss(t.id));
+  }, [toasts]);
+
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [barang, setBarang] = useState<Barang[]>([]);
@@ -264,7 +273,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-center"
+        toastOptions={{ duration: 1000 }}
+      />
 
       <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-3">
