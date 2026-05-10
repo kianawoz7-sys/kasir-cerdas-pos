@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "Barang": {
+      "title": "Barang",
+      "description": "Master data barang/produk",
+      "type": "object",
+      "properties": {
+        "nama_barang": { "type": "string" },
+        "harga": { "type": "integer" },
+        "stok": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nama_barang", "harga", "stok"]
+    },
+    "Transaksi": {
+      "title": "Transaksi",
+      "description": "Data transaksi penjualan",
+      "type": "object",
+      "properties": {
+        "no_transaksi": { "type": "string" },
+        "total_harga": { "type": "integer" },
+        "total_qty": { "type": "integer" },
+        "status": { "type": "string", "enum": ["completed"] },
+        "tanggal": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["no_transaksi", "total_harga", "total_qty", "status", "tanggal"]
+    },
+    "TransaksiItem": {
+      "title": "Transaksi Item",
+      "description": "Item detail dalam sebuah transaksi",
+      "type": "object",
+      "properties": {
+        "barang_id": { "type": "string" },
+        "nama_barang": { "type": "string" },
+        "harga": { "type": "integer" },
+        "jumlah": { "type": "integer" },
+        "subtotal": { "type": "integer" }
+      },
+      "required": ["barang_id", "nama_barang", "harga", "jumlah", "subtotal"]
+    },
+    "Counter": {
+      "title": "Counter",
+      "description": "Daily transaction counter",
+      "type": "object",
+      "properties": {
+        "count": { "type": "integer" }
+      },
+      "required": ["count"]
+    }
+  },
+  "firestore": {
+    "/barang": {
+      "schema": "Barang",
+      "description": "Daftar barang tersedia"
+    },
+    "/transaksi": {
+      "schema": "Transaksi",
+      "description": "Koleksi transaksi"
+    },
+    "/transaksi/{transaksiId}/items": {
+      "schema": "TransaksiItem",
+      "description": "Detail item per transaksi"
+    },
+    "/counters": {
+      "schema": "Counter",
+      "description": "Daily counters for transaction numbering"
+    }
+  }
+}

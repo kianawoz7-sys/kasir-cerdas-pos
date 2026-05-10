@@ -1,0 +1,6 @@
+{
+  "name": "Kasir Cerdas POS",
+  "description": "A simple and powerful POS (Point of Sale) system with real-time stock management, transaction history, and easy receipt sharing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

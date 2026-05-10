@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Barang validation
+    function isValidBarang(data) {
+      return data.nama_barang is string && data.nama_barang.size() > 0 && data.nama_barang.size() <= 100
+          && data.harga is int && data.harga >= 0
+          && data.stok is int && data.stok >= 0;
+    }
+
+    // Transaksi validation
+    function isValidTransaksi(data) {
+      return data.no_transaksi is string && data.no_transaksi.size() > 0
+          && data.total_harga is int && data.total_harga >= 0
+          && data.total_qty is int && data.total_qty >= 0
+          && data.status == 'completed'
+          && data.tanggal is timestamp;
+    }
+
+    // TransaksiItem validation
+    function isValidTransaksiItem(data) {
+      return data.barang_id is string && data.nama_barang is string
+          && data.harga is int && data.harga >= 0
+          && data.jumlah is int && data.jumlah > 0
+          && data.subtotal is int && data.subtotal >= 0;
+    }
+
+    // Barang collection
+    match /barang/{barangId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidBarang(request.resource.data);
+      allow update: if isSignedIn() 
+                    && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stok', 'nama_barang', 'harga'])
+                    || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stok']));
+      allow delete: if isSignedIn();
+    }
+
+    // Transaksi collection
+    match /transaksi/{transaksiId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidTransaksi(request.resource.data);
+      allow delete: if isSignedIn();
+
+      // Items subcollection
+      match /items/{itemId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidTransaksiItem(request.resource.data);
+      }
+    }
+
+    // Counters collection
+    match /counters/{date} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // Simplified for daily transaction counter
+    }
+  }
+}
