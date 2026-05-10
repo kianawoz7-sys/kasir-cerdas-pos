@@ -13,7 +13,9 @@ import {
   Package,
   Clock,
   Share2,
-  Download
+  Download,
+  Wallet,
+  TrendingUp
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { id } from 'date-fns/locale';
@@ -42,21 +44,31 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
     trx.no_transaksi.toLowerCase().includes(search.toLowerCase())
   );
 
+  const totalRevenue = filteredHistory.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
+  const totalTrx = filteredHistory.length;
+
   // Rekap Data Calculation
   const monthlyRekap = useMemo(() => {
-    const months: Record<string, { total: number; count: number; items: number }> = {};
+    const months: Record<string, { total: number; count: number; items: number; laba: number }> = {};
 
     history.forEach(trx => {
       const date = trx.tanggal.toDate ? trx.tanggal.toDate() : new Date(trx.tanggal);
       const monthKey = format(date, 'yyyy-MM');
 
       if (!months[monthKey]) {
-        months[monthKey] = { total: 0, count: 0, items: 0 };
+        months[monthKey] = { total: 0, count: 0, items: 0, laba: 0 };
       }
 
       months[monthKey].total += trx.total_harga;
       months[monthKey].count += 1;
       months[monthKey].items += trx.items?.reduce((sum, item) => sum + item.jumlah, 0) || 0;
+
+      let trxLaba = 0;
+      trx.items?.forEach(item => {
+        const hargaBeli = item.harga_beli || 0;
+        trxLaba += (item.harga - hargaBeli) * item.jumlah;
+      });
+      months[monthKey].laba += trxLaba;
     });
 
     return Object.entries(months)
@@ -70,23 +82,23 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
 
   const confirmDelete = async () => {
     if (!deleteConfirmTrx) return;
-    const loadingToast = toast.loading('Menghapus transaksi...');
+    toast.remove();
+    toast.loading('Menghapus transaksi...', { id: 'global-pos-toast' });
     try {
       await posService.deleteTransaksi(deleteConfirmTrx);
-      toast.success('Transaksi berhasil dihapus!', { duration: 1500 });
+      toast.success('Transaksi berhasil dihapus!', { id: 'global-pos-toast', duration: 1500 });
       setDeleteConfirmTrx(null);
       onDelete();
     } catch (error) {
-      toast.error('Gagal menghapus transaksi', { duration: 1500 });
-    } finally {
-      toast.dismiss(loadingToast);
+      toast.error('Gagal menghapus transaksi', { id: 'global-pos-toast', duration: 1500 });
     }
   };
 
   const downloadReport = async () => {
     if (!reportRef.current) return;
-    
-    const loadingToast = toast.loading('Memproses gambar...');
+
+    toast.remove();
+    toast.loading('Memproses gambar...', { id: 'global-pos-toast' });
     try {
       const dataUrl = await toPng(reportRef.current, {
         quality: 1.0,
@@ -98,12 +110,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
       link.download = `Laporan_Bulanan_KasirCerdas.png`;
       link.href = dataUrl;
       link.click();
-      toast.success('Laporan berhasil diunduh!', { duration: 1500 });
+      toast.success('Laporan berhasil diunduh!', { id: 'global-pos-toast', duration: 1500 });
     } catch (err) {
       console.error('Gagal mengunduh gambar:', err);
-      toast.error('Gagal menyimpan gambar', { duration: 1500 });
-    } finally {
-      toast.dismiss(loadingToast);
+      toast.error('Gagal menyimpan gambar', { id: 'global-pos-toast', duration: 1500 });
     }
   };
 
@@ -179,14 +189,35 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-4">
+              {/* Dynamic Revenue Summary Widget */}
+              <div className="px-4 md:px-8 pt-4 md:pt-6">
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 shadow-xl shadow-blue-500/20 flex items-center justify-between text-white border border-blue-400/30">
+                  <div className="flex items-center gap-4 md:gap-5">
+                    <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0 shadow-inner">
+                      <Wallet className="w-6 h-6 md:w-7 md:h-7 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] md:text-xs font-black text-blue-100 uppercase tracking-widest mb-0.5 md:mb-1">Total Omset</h3>
+                      <p className="text-xl md:text-3xl font-black tracking-tighter text-white drop-shadow-sm">Rp {totalRevenue.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 md:px-4 py-1.5 md:py-2 rounded-xl backdrop-blur-md shadow-sm">
+                      <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-300" />
+                      <span className="text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">{totalTrx} <span className="hidden sm:inline">Transaksi Sukses</span><span className="sm:hidden">Trx</span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-4 md:pt-6">
                 <div className="space-y-4">
                   {filteredHistory.map(trx => (
                     <div
                       key={trx.id}
                       className={`bg-white rounded-3xl border transition-all duration-300 ${expandedId === trx.id
-                          ? 'border-blue-200 shadow-xl ring-4 ring-blue-50/50'
-                          : 'border-slate-100 hover:border-slate-300 shadow-sm'
+                        ? 'border-blue-200 shadow-xl ring-4 ring-blue-50/50'
+                        : 'border-slate-100 hover:border-slate-300 shadow-sm'
                         }`}
                     >
                       <div
@@ -324,71 +355,75 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
                   <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-1">Laporan Omset Bulanan</p>
                   <p className="text-slate-300 font-bold text-[9px] mt-2 italic">{format(new Date(), 'dd MMMM yyyy • HH:mm', { locale: id })}</p>
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {monthlyRekap.map(item => (
-                  <motion.div
-                    key={item.month}
-                    whileHover={{ y: -5 }}
-                    className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-6 md:mb-8">
-                        <div className="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-2xl md:rounded-3xl group-hover:bg-emerald-500 group-hover:text-white transition-all duration-500">
-                          <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
+                  {monthlyRekap.map(item => (
+                    <motion.div
+                      key={item.month}
+                      whileHover={{ y: -5 }}
+                      className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-6 md:mb-8">
+                          <div className="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-2xl md:rounded-3xl group-hover:bg-emerald-500 group-hover:text-white transition-all duration-500">
+                            <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
+                          </div>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {item.count} Transaksi
+                          </span>
                         </div>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          {item.count} Transaksi
-                        </span>
+                        <h4 className="text-[11px] md:text-sm font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
+                          {format(parseISO(`${item.month}-01`), 'MMMM yyyy', { locale: id })}
+                        </h4>
+                        <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter leading-tight break-all">
+                          Rp {item.total.toLocaleString()}
+                        </p>
+                        <p className="text-sm font-black text-emerald-500 mt-2 mb-6 md:mb-8">Laba: Rp {item.laba.toLocaleString()}</p>
                       </div>
-                      <h4 className="text-[11px] md:text-sm font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
-                        {format(parseISO(`${item.month}-01`), 'MMMM yyyy', { locale: id })}
-                      </h4>
-                      <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter mb-6 md:mb-8 leading-tight break-all">
-                        Rp {item.total.toLocaleString()}
+
+                      <div className="space-y-4 pt-6 border-t border-slate-50 italic">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-bold uppercase tracking-widest">Volume Item</span>
+                          <span className="font-black text-slate-800">{item.items} Pcs</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-bold uppercase tracking-widest">Avg / Trx</span>
+                          <span className="font-black text-slate-800">Rp {Math.round(item.total / item.count).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {monthlyRekap.length === 0 && (
+                    <div className="col-span-full py-40 text-center text-slate-200">
+                      <BarChart3 className="w-24 h-24 mx-auto mb-6 opacity-10" />
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Belum ada statistik tersedia</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Insight Summary */}
+                {monthlyRekap.length > 0 && (
+                  <div className="mt-8 p-6 md:p-8 bg-slate-900 rounded-[2rem] text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6 md:gap-8 shadow-xl">
+                    <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto">
+                      <div className="w-12 h-12 md:w-16 md:h-16 bg-white/10 backdrop-blur-md rounded-2xl md:rounded-3xl flex items-center justify-center shrink-0">
+                        <Eye className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg md:text-xl font-black tracking-tight mb-0.5 md:mb-1 uppercase tracking-widest truncate">Insight Bisnis</h3>
+                        <p className="text-[9px] md:text-xs text-slate-400 uppercase tracking-widest truncate">Total Akumulasi Pendapatan</p>
+                      </div>
+                    </div>
+                    <div className="text-left md:text-right w-full md:w-auto flex flex-col items-start md:items-end">
+                      <p className="text-3xl md:text-4xl font-black tracking-tighter text-blue-400 leading-none break-all">
+                        Rp {monthlyRekap.reduce((sum, item) => sum + item.total, 0).toLocaleString()}
+                      </p>
+                      <p className="text-sm md:text-base font-black text-emerald-400 tracking-tighter mt-2">
+                        Total Laba: Rp {monthlyRekap.reduce((sum, item) => sum + item.laba, 0).toLocaleString()}
                       </p>
                     </div>
-
-                    <div className="space-y-4 pt-6 border-t border-slate-50 italic">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400 font-bold uppercase tracking-widest">Volume Item</span>
-                        <span className="font-black text-slate-800">{item.items} Pcs</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400 font-bold uppercase tracking-widest">Avg / Trx</span>
-                        <span className="font-black text-slate-800">Rp {Math.round(item.total / item.count).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-
-                {monthlyRekap.length === 0 && (
-                  <div className="col-span-full py-40 text-center text-slate-200">
-                    <BarChart3 className="w-24 h-24 mx-auto mb-6 opacity-10" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Belum ada statistik tersedia</p>
                   </div>
                 )}
-              </div>
-
-              {/* Insight Summary */}
-              {monthlyRekap.length > 0 && (
-                <div className="mt-8 p-6 md:p-8 bg-slate-900 rounded-[2rem] text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6 md:gap-8 shadow-xl">
-                  <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto">
-                    <div className="w-12 h-12 md:w-16 md:h-16 bg-white/10 backdrop-blur-md rounded-2xl md:rounded-3xl flex items-center justify-center shrink-0">
-                      <Eye className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg md:text-xl font-black tracking-tight mb-0.5 md:mb-1 uppercase tracking-widest truncate">Insight Bisnis</h3>
-                      <p className="text-[9px] md:text-xs text-slate-400 uppercase tracking-widest truncate">Total Akumulasi Pendapatan</p>
-                    </div>
-                  </div>
-                  <div className="text-left md:text-right w-full md:w-auto">
-                    <p className="text-3xl md:text-4xl font-black tracking-tighter text-blue-400 leading-none break-all">
-                      Rp {monthlyRekap.reduce((sum, item) => sum + item.total, 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              )}
               </div>
             </div>
           )}

@@ -1,6 +1,7 @@
 export interface Barang {
   id: string;
   nama_barang: string;
+  harga_beli?: number;
   harga: number;
   stok: number;
   created_at?: any;
@@ -10,6 +11,7 @@ export interface TransaksiItem {
   id?: string;
   barang_id: string;
   nama_barang: string;
+  harga_beli?: number;
   harga: number;
   jumlah: number;
   subtotal: number;

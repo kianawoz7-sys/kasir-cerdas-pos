@@ -98,12 +98,13 @@ export default function App() {
   };
 
   const login = async () => {
+    toast.remove();
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      toast.success('Berhasil login');
+      toast.success('Berhasil login', { id: 'global-pos-toast' });
     } catch (e) {
-      toast.error('Gagal login');
+      toast.error('Gagal login', { id: 'global-pos-toast' });
     }
   };
 
@@ -115,8 +116,9 @@ export default function App() {
   };
 
   const addToCart = () => {
+    toast.remove();
     if (!selectedBarangId) {
-      toast.error('Pilih barang terlebih dahulu');
+      toast.error('Pilih barang terlebih dahulu', { id: 'global-pos-toast' });
       return;
     }
 
@@ -127,7 +129,7 @@ export default function App() {
     const qty = Number(qtyInput);
 
     if (qty <= 0 || isNaN(qty)) {
-      toast.error('Jumlah tidak valid!');
+      toast.error('Jumlah tidak valid!', { id: 'global-pos-toast' });
       return;
     }
 
@@ -136,11 +138,11 @@ export default function App() {
       const newCart = [...cart];
 
       if (newCart[existingIndex].jumlah >= item.stok) {
-        toast.error('Batas stok maksimal tercapai!', { id: 'stok-limit' });
+        toast.error('Batas stok maksimal tercapai!', { id: 'global-pos-toast' });
       } else {
         const newQty = newCart[existingIndex].jumlah + qty;
         if (newQty > item.stok) {
-          toast.error(`Sisa stok hanya ${item.stok}, disesuaikan.`, { id: 'stok-limit' });
+          toast.error(`Sisa stok hanya ${item.stok}, disesuaikan.`, { id: 'global-pos-toast' });
           newCart[existingIndex].jumlah = item.stok;
         } else {
           newCart[existingIndex].jumlah = newQty;
@@ -150,12 +152,13 @@ export default function App() {
       }
     } else {
       if (qty > item.stok) {
-        toast.error('Stok tidak mencukupi');
+        toast.error('Stok tidak mencukupi', { id: 'global-pos-toast' });
         return;
       }
       setCart([...cart, {
         barang_id: item.id,
         nama_barang: item.nama_barang,
+        harga_beli: Number(item.harga_beli) || 0,
         harga: Number(item.harga),
         jumlah: qty,
         subtotal: qty * Number(item.harga)
@@ -164,15 +167,16 @@ export default function App() {
 
     setSelectedBarangId('');
     setQtyInput(1);
-    toast.success(`${item.nama_barang} ditambahkan`, { id: item.id, duration: 800 });
+    toast.success(`${item.nama_barang} ditambahkan`, { id: 'global-pos-toast', duration: 800 });
   };
 
   const updateCartQty = (index: number, newQty: number) => {
+    toast.remove();
     if (newQty <= 0) return;
 
     const itemInBarang = barang.find(b => b.id === cart[index].barang_id);
     if (itemInBarang && newQty > itemInBarang.stok) {
-      toast.error('Batas stok maksimal tercapai!', { id: 'stok-limit' });
+      toast.error('Batas stok maksimal tercapai!', { id: 'global-pos-toast' });
       return;
     }
 
@@ -191,13 +195,14 @@ export default function App() {
   const totalQty = cart.reduce((sum, item) => sum + item.jumlah, 0);
 
   const handleCheckout = async () => {
+    toast.remove();
     if (cart.length === 0) {
-      toast.error('Keranjang kosong');
+      toast.error('Keranjang kosong', { id: 'global-pos-toast' });
       return;
     }
 
     const total_harga = totalBelanja;
-    const loadingToast = toast.loading('Memproses transaksi...');
+    toast.loading('Memproses transaksi...', { id: 'global-pos-toast' });
     try {
       const result = await posService.checkout({
         total_harga: total_harga,
@@ -205,8 +210,7 @@ export default function App() {
         status: 'completed'
       }, cart);
 
-      toast.dismiss(loadingToast);
-      toast.success('Transaksi Berhasil!');
+      toast.success('Transaksi Berhasil!', { id: 'global-pos-toast' });
 
       await loadData();
 
@@ -223,8 +227,7 @@ export default function App() {
       setShowReceipt(fullTrx);
       setCart([]);
     } catch (e: any) {
-      toast.dismiss(loadingToast);
-      toast.error(e.message || 'Gagal memproses transaksi');
+      toast.error(e.message || 'Gagal memproses transaksi', { id: 'global-pos-toast' });
     }
   };
 
@@ -232,16 +235,16 @@ export default function App() {
     const isConfirmed = await customConfirm('Hapus transaksi ini? Stok akan dikembalikan.');
     if (!isConfirmed) return;
 
+    toast.remove();
     setExpandedTrx(null);
-    const loadingToast = toast.loading('Menghapus...');
+    toast.loading('Menghapus...', { id: 'global-pos-toast' });
     try {
       await posService.deleteTransaksi(trx);
-      toast.dismiss(loadingToast);
-      toast.success('Transaksi dihapus');
-      loadData();
+      toast.success('Transaksi dihapus', { id: 'global-pos-toast', duration: 1500 });
+      // Delay to avoid UI blocking toast
+      setTimeout(() => loadData(), 100);
     } catch (e) {
-      toast.dismiss(loadingToast);
-      toast.error('Gagal menghapus');
+      toast.error('Gagal menghapus', { id: 'global-pos-toast', duration: 1500 });
     }
   };
 
