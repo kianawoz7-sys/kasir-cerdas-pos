@@ -73,13 +73,13 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
     const loadingToast = toast.loading('Menghapus transaksi...');
     try {
       await posService.deleteTransaksi(deleteConfirmTrx);
-      toast.dismiss(loadingToast);
-      toast.success('Transaksi berhasil dihapus!');
+      toast.success('Transaksi berhasil dihapus!', { duration: 1500 });
       setDeleteConfirmTrx(null);
       onDelete();
     } catch (error) {
+      toast.error('Gagal menghapus transaksi', { duration: 1500 });
+    } finally {
       toast.dismiss(loadingToast);
-      toast.error('Gagal menghapus transaksi');
     }
   };
 
@@ -88,23 +88,22 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
     
     const loadingToast = toast.loading('Memproses gambar...');
     try {
-      // Sembunyikan bayangan/border mengganggu sebelum capture kalo perlu
       const dataUrl = await toPng(reportRef.current, {
         quality: 1.0,
         backgroundColor: '#ffffff',
-        pixelRatio: 2 // Biar resolusi bagus pas dizoom
+        pixelRatio: 2
       });
 
       const link = document.createElement('a');
       link.download = `Laporan_Bulanan_KasirCerdas.png`;
       link.href = dataUrl;
       link.click();
-      toast.dismiss(loadingToast);
-      toast.success('Laporan berhasil diunduh!');
+      toast.success('Laporan berhasil diunduh!', { duration: 1500 });
     } catch (err) {
       console.error('Gagal mengunduh gambar:', err);
+      toast.error('Gagal menyimpan gambar', { duration: 1500 });
+    } finally {
       toast.dismiss(loadingToast);
-      toast.error('Gagal menyimpan gambar');
     }
   };
 

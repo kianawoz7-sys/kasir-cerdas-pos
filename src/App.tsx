@@ -131,37 +131,40 @@ export default function App() {
       return;
     }
 
-    if (qty > item.stok) {
-      toast.error('Stok tidak mencukupi');
-      return;
-    }
-
     const existingIndex = cart.findIndex(c => c.barang_id === item.id);
     if (existingIndex > -1) {
       const newCart = [...cart];
-      const newQty = newCart[existingIndex].jumlah + qty;
 
-      if (newQty > item.stok) {
-        toast.error('Total jumlah melebihi stok');
+      if (newCart[existingIndex].jumlah >= item.stok) {
+        toast.error('Batas stok maksimal tercapai!', { id: 'stok-limit' });
+      } else {
+        const newQty = newCart[existingIndex].jumlah + qty;
+        if (newQty > item.stok) {
+          toast.error(`Sisa stok hanya ${item.stok}, disesuaikan.`, { id: 'stok-limit' });
+          newCart[existingIndex].jumlah = item.stok;
+        } else {
+          newCart[existingIndex].jumlah = newQty;
+        }
+        newCart[existingIndex].subtotal = Number(item.harga) * newCart[existingIndex].jumlah;
+        setCart(newCart);
+      }
+    } else {
+      if (qty > item.stok) {
+        toast.error('Stok tidak mencukupi');
         return;
       }
-
-      newCart[existingIndex].jumlah = newQty;
-      newCart[existingIndex].subtotal = newCart[existingIndex].jumlah * item.harga;
-      setCart(newCart);
-    } else {
       setCart([...cart, {
         barang_id: item.id,
         nama_barang: item.nama_barang,
-        harga: item.harga,
+        harga: Number(item.harga),
         jumlah: qty,
-        subtotal: qty * item.harga
+        subtotal: qty * Number(item.harga)
       }]);
     }
 
     setSelectedBarangId('');
     setQtyInput(1);
-    toast.success(`${item.nama_barang} ditambahkan`);
+    toast.success(`${item.nama_barang} ditambahkan`, { id: item.id, duration: 800 });
   };
 
   const updateCartQty = (index: number, newQty: number) => {
@@ -169,13 +172,13 @@ export default function App() {
 
     const itemInBarang = barang.find(b => b.id === cart[index].barang_id);
     if (itemInBarang && newQty > itemInBarang.stok) {
-      toast.error('Stok tidak mencukupi');
+      toast.error('Batas stok maksimal tercapai!', { id: 'stok-limit' });
       return;
     }
 
     const newCart = [...cart];
     newCart[index].jumlah = newQty;
-    newCart[index].subtotal = newCart[index].jumlah * newCart[index].harga;
+    newCart[index].subtotal = Number(newCart[index].harga) * newQty;
     setCart(newCart);
   };
 
@@ -184,7 +187,7 @@ export default function App() {
     setCart(newCart);
   };
 
-  const totalHarga = cart.reduce((sum, item) => sum + item.subtotal, 0);
+  const totalBelanja = cart.reduce((sum, item) => sum + (Number(item.harga) * item.jumlah), 0);
   const totalQty = cart.reduce((sum, item) => sum + item.jumlah, 0);
 
   const handleCheckout = async () => {
@@ -193,10 +196,11 @@ export default function App() {
       return;
     }
 
+    const total_harga = totalBelanja;
     const loadingToast = toast.loading('Memproses transaksi...');
     try {
       const result = await posService.checkout({
-        total_harga: totalHarga,
+        total_harga: total_harga,
         total_qty: totalQty,
         status: 'completed'
       }, cart);
@@ -209,7 +213,7 @@ export default function App() {
       const fullTrx: Transaksi = {
         id: result.id,
         no_transaksi: result.no_transaksi,
-        total_harga: totalHarga,
+        total_harga: total_harga,
         total_qty: totalQty,
         status: 'completed',
         tanggal: result.tanggal,
@@ -228,6 +232,7 @@ export default function App() {
     const isConfirmed = await customConfirm('Hapus transaksi ini? Stok akan dikembalikan.');
     if (!isConfirmed) return;
 
+    setExpandedTrx(null);
     const loadingToast = toast.loading('Menghapus...');
     try {
       await posService.deleteTransaksi(trx);
@@ -275,42 +280,42 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
       <Toaster
         position="top-center"
-        toastOptions={{ duration: 1000 }}
+        toastOptions={{ duration: 1500 }}
       />
 
-      <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-200">K</div>
+      <header className="flex items-center justify-between px-4 md:px-8 py-2.5 md:py-4 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-lg md:text-xl shadow-lg shadow-blue-200">K</div>
           <div>
-            <h1 className="text-xl font-black leading-none text-slate-900 tracking-tight">KASIR CERDAS</h1>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">POS System v2.0</span>
+            <h1 className="text-sm md:text-xl font-black leading-none text-slate-900 tracking-tight">KASIR CERDAS</h1>
+            <span className="text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-bold">POS System v2.0</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 md:gap-6">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-bold text-slate-900">{format(currentTime, 'dd MMMM yyyy')}</p>
             <p className="text-xs text-slate-500 font-mono tracking-tighter">{format(currentTime, 'HH:mm:ss')}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 md:gap-2">
             <button
               onClick={() => setShowHistoryModal(true)}
-              className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
+              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
               title="Semua Transaksi & Rekap"
             >
-              <FileText className="w-5 h-5" />
+              <FileText className="w-4 h-4 md:w-5 md:h-5" />
             </button>
             <button
               onClick={() => setShowInventory(true)}
-              className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
+              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
               title="Inventaris"
             >
-              <Package className="w-5 h-5" />
+              <Package className="w-4 h-4 md:w-5 md:h-5" />
             </button>
-            <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
+            <div className="h-6 md:h-8 w-[1px] bg-slate-200 mx-0.5 md:mx-1"></div>
             <button
               onClick={logout}
-              className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md hover:border-blue-200 transition-all active:scale-95"
+              className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-white shadow-md hover:border-blue-200 transition-all active:scale-95"
               title={user.displayName}
             >
               <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
@@ -319,20 +324,20 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-[1440px] mx-auto w-full px-4 md:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 overflow-x-hidden">
+      <main className="flex-1 max-w-[1440px] mx-auto w-full px-4 md:px-8 py-4 md:py-8 grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 overflow-x-hidden">
 
-        <div className="lg:col-span-8 space-y-6">
-          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="lg:col-span-8 space-y-4 md:space-y-6">
+          <section className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
               <div className="md:col-span-12">
-                <label className="block text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest">Pilih Barang</label>
+                <label className="block text-[10px] font-black text-slate-400 mb-1.5 md:mb-2 uppercase tracking-widest">Pilih Barang</label>
                 <div className="relative group/search">
                   <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within/search:text-blue-500 transition-colors" />
+                    <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within/search:text-blue-500 transition-colors" />
                     <input
                       type="text"
                       placeholder="Cari nama barang..."
-                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-medium text-sm text-slate-700 shadow-sm"
+                      className="w-full h-10 md:h-12 bg-slate-50 border border-slate-200 rounded-xl pl-10 md:pl-11 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-medium text-sm text-slate-700 shadow-sm"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onFocus={() => {
@@ -404,10 +409,10 @@ export default function App() {
                     exit={{ opacity: 0, height: 0 }}
                     className="md:col-span-12"
                   >
-                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between group gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0">
-                          <Package className="w-5 h-5 text-blue-600" />
+                    <div className="p-3 md:p-4 bg-blue-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between group gap-3 md:gap-4">
+                      <div className="flex items-center gap-3 md:gap-4">
+                        <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                          <Package className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
                         </div>
                         <div>
                           <p className="font-black text-slate-800 text-sm uppercase tracking-tight line-clamp-1">
@@ -566,7 +571,7 @@ export default function App() {
             <div className="p-4 sm:p-6 bg-slate-900 flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
               <div className="text-center sm:text-left">
                 <p className="text-[10px] text-slate-400 uppercase font-black tracking-[0.2em] mb-1">Total Pembayaran</p>
-                <p className="text-3xl font-black text-white tracking-tighter">Rp {totalHarga.toLocaleString()}</p>
+                <p className="text-3xl font-black text-white tracking-tighter">Rp {totalBelanja.toLocaleString()}</p>
               </div>
               <button
                 onClick={handleCheckout}
@@ -579,9 +584,9 @@ export default function App() {
           </section>
         </div>
 
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="lg:col-span-4 flex flex-col gap-4 md:gap-6">
           <section className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
-            <div className="px-5 py-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
+            <div className="px-4 md:px-5 py-3 md:py-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Riwayat Hari Ini</span>
               <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase tracking-tighter">Live Audit</span>
             </div>

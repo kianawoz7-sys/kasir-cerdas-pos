@@ -48,7 +48,7 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(getShareText());
-    toast.success('Disalin ke clipboard');
+    toast.success('Disalin ke clipboard', { duration: 1500 });
   };
 
   const shareWA = () => {
@@ -59,7 +59,7 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
   const shareFB = () => {
     // Basic FB share usually needs a link, but we can copy text first
     copyToClipboard();
-    toast('Teks disalin, silakan tempel di Facebook', { icon: '📘' });
+    toast('Teks disalin, silakan tempel di Facebook', { icon: '📘', duration: 1500 });
   };
 
   const printReceipt = async () => {
@@ -84,10 +84,10 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
       link.download = `${trx.no_transaksi}.png`;
       link.href = dataUrl;
       link.click();
-      toast.success('Gambar berhasil diunduh!');
+      toast.success('Gambar berhasil diunduh!', { duration: 1500 });
     } catch (err) {
       console.error('Gagal mengunduh gambar:', err);
-      toast.error('Gagal menyimpan gambar');
+      toast.error('Gagal menyimpan gambar', { duration: 1500 });
     }
   };
 
@@ -105,7 +105,7 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="relative bg-white rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] max-w-sm w-full overflow-hidden flex flex-col border border-slate-100"
+        className="relative bg-white rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] max-w-sm w-full max-h-[95vh] overflow-y-auto flex flex-col border border-slate-100"
       >
         <div className="p-6 border-b flex justify-between items-center bg-emerald-50/50">
           <div className="flex items-center gap-3 text-emerald-600">
@@ -114,8 +114,8 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
             </div>
             <span className="text-xs font-black uppercase tracking-widest">Transaksi Berhasil</span>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-white rounded-full transition-all active:scale-90">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-rose-50 rounded-full transition-all active:scale-90 shadow-sm border border-slate-200 group">
+            <X className="w-6 h-6 text-slate-700 group-hover:text-rose-600 transition-colors" />
           </button>
         </div>
 
@@ -164,7 +164,7 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
           </div>
         </div>
 
-        <div className="p-8 grid grid-cols-2 gap-4 bg-white border-t border-slate-100">
+        <div className="p-8 pb-12 sm:pb-8 grid grid-cols-2 gap-4 bg-white border-t border-slate-100">
           <button
             onClick={shareWA}
             className="flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
@@ -189,6 +189,16 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
           >
             <Download className="w-4 h-4" /> Simpan Gambar
           </button>
+
+          {/* NEW BIG CLOSE BUTTON */}
+          <div className="col-span-2 mt-4 pt-6 border-t border-slate-100">
+            <button
+              onClick={onClose}
+              className="w-full flex items-center justify-center py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-sm font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-500/30 active:scale-95"
+            >
+              SELESAI & TUTUP
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

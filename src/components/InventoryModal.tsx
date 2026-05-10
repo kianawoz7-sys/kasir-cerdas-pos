@@ -8,8 +8,12 @@ import {
   Save, 
   Search, 
   Package,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format } from 'date-fns';
 import { posService } from '../services/posService';
 import { Barang } from '../types';
 import { toast } from 'react-hot-toast';
@@ -47,7 +51,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nama_barang || form.harga < 0 || form.stok < 0) {
-      toast.error('Data tidak valid');
+      toast.error('Data tidak valid', { duration: 1500 });
       return;
     }
 
@@ -55,16 +59,16 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
     try {
       if (editingId) {
         await posService.updateBarang(editingId, form);
-        toast.success('Barang diperbarui');
+        toast.success('Barang diperbarui', { duration: 1500 });
       } else {
         await posService.addBarang(form);
-        toast.success('Barang ditambahkan');
+        toast.success('Barang ditambahkan', { duration: 1500 });
       }
       setForm({ nama_barang: '', harga: 0, stok: 0 });
       setEditingId(null);
       loadItems();
     } catch (err) {
-      toast.error('Gagal menyimpan');
+      toast.error('Gagal menyimpan', { duration: 1500 });
     } finally {
       toast.dismiss(loadToast);
     }
@@ -86,13 +90,75 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
     const loadToast = toast.loading('Menghapus...');
     try {
       await posService.deleteBarang(id);
-      toast.success('Terhapus');
+      toast.success('Terhapus', { duration: 1500 });
       loadItems();
     } catch (err) {
-      toast.error('Gagal menghapus');
+      toast.error('Gagal menghapus', { duration: 1500 });
     } finally {
       toast.dismiss(loadToast);
     }
+  };
+
+  const exportPDF = () => {
+    if (items.length === 0) {
+      toast.error('Tidak ada data untuk diexport', { duration: 1500 });
+      return;
+    }
+
+    const doc = new jsPDF();
+    const dateStr = format(new Date(), 'dd MMM yyyy HH:mm');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LAPORAN STOK GUDANG - KASIR CERDAS TOKO', 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Dicetak pada: ${dateStr}`, 14, 28);
+    
+    const sortedItems = [...items].sort((a, b) => {
+      const getCat = (stok: number) => stok === 0 ? 0 : (stok <= 5 ? 1 : 2);
+      const catA = getCat(a.stok);
+      const catB = getCat(b.stok);
+      if (catA !== catB) return catA - catB;
+      return a.nama_barang.localeCompare(b.nama_barang);
+    });
+
+    const tableData = sortedItems.map((item, index) => {
+      const status = item.stok === 0 ? 'HABIS' : (item.stok <= 5 ? 'MENIPIS' : 'AMAN');
+      return [
+        index + 1,
+        item.nama_barang,
+        `Rp ${item.harga.toLocaleString()}`,
+        item.stok.toString(),
+        status
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['No', 'Nama Barang', 'Harga Jual', 'Stok Sekarang', 'Status']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+      didParseCell: function(data) {
+        if (data.section === 'body') {
+          const status = (data.row.raw as string[])[4];
+          if (status === 'HABIS') {
+            data.cell.styles.fillColor = [254, 226, 226];
+            data.cell.styles.textColor = [153, 27, 27];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (status === 'MENIPIS') {
+            data.cell.styles.fillColor = [254, 249, 195];
+            data.cell.styles.textColor = [133, 77, 14];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    });
+
+    doc.save(`Laporan_Stok_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
+    toast.success('Laporan PDF berhasil diunduh', { duration: 1500 });
   };
 
   const filteredItems = items.filter(i => 
@@ -231,17 +297,28 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
                 />
               </div>
               <div className="flex w-full md:w-auto items-center justify-between gap-4">
-                <button 
-                  onClick={() => setShowOnlyInStock(!showOnlyInStock)}
-                  className={`flex-1 md:flex-none justify-center items-center gap-2 px-4 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    showOnlyInStock 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
-                      : 'bg-white text-slate-400 border border-slate-200 hover:border-blue-200 hover:text-blue-500'
-                  }`}
-                >
-                  <Package className="w-3.5 h-3.5 inline-block mr-1" />
-                  {showOnlyInStock ? 'Tersedia' : 'Semua'}
-                </button>
+                <div className="flex gap-2 flex-1 md:flex-none">
+                  <button 
+                    onClick={exportPDF}
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 h-11 bg-slate-900 text-white hover:bg-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-md shadow-slate-900/10"
+                    title="Download Laporan PDF"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Export PDF</span>
+                  </button>
+                  <button 
+                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
+                    className={`flex-1 md:flex-none justify-center items-center gap-2 px-4 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      showOnlyInStock 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                        : 'bg-white text-slate-400 border border-slate-200 hover:border-blue-200 hover:text-blue-500'
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5 inline-block mr-1" />
+                    <span className="hidden md:inline">{showOnlyInStock ? 'Tersedia' : 'Semua'}</span>
+                    <span className="md:hidden">{showOnlyInStock ? 'Stok' : 'Semua'}</span>
+                  </button>
+                </div>
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
                   {filteredItems.length} Items
                 </div>
