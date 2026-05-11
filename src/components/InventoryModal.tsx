@@ -135,7 +135,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
 
     doc.setFont('helvetica', 'bold');
     doc.text(`Total Valuasi Gudang (Modal): Rp ${totalValuasi.toLocaleString('id-ID')}`, 14, 34);
-    doc.text(`Total Potensi Keuntungan: Rp ${totalPotensiKeuntungan.toLocaleString('id-ID')}`, 14, 40);
+    doc.text(`Total Valuasi Gudang: Rp ${totalPotensiKeuntungan.toLocaleString('id-ID')}`, 14, 40);
 
     const sortedItems = [...items].sort((a, b) => {
       const getCat = (stok: number) => stok === 0 ? 0 : (stok <= 5 ? 1 : 2);
