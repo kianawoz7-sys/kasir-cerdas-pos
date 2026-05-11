@@ -47,6 +47,16 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
   const totalRevenue = filteredHistory.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
   const totalTrx = filteredHistory.length;
 
+  const todayHistory = history.filter(trx => {
+    const trxDate = trx.tanggal?.toDate ? trx.tanggal.toDate() : new Date(trx.tanggal);
+    const today = new Date();
+    return trxDate.getDate() === today.getDate() &&
+      trxDate.getMonth() === today.getMonth() &&
+      trxDate.getFullYear() === today.getFullYear();
+  });
+  const todayRevenue = todayHistory.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
+  const todayTrxCount = todayHistory.length;
+
   // Rekap Data Calculation
   const monthlyRekap = useMemo(() => {
     const months: Record<string, { total: number; count: number; items: number; laba: number }> = {};
@@ -191,20 +201,42 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ history, onClose, on
 
               {/* Dynamic Revenue Summary Widget */}
               <div className="px-4 md:px-8 pt-4 md:pt-6">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 shadow-xl shadow-blue-500/20 flex items-center justify-between text-white border border-blue-400/30">
-                  <div className="flex items-center gap-4 md:gap-5">
-                    <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0 shadow-inner">
-                      <Wallet className="w-6 h-6 md:w-7 md:h-7 text-white" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Column 1: Hari Ini */}
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 shadow-xl shadow-emerald-500/20 flex items-center justify-between text-white border border-emerald-400/30">
+                    <div className="flex items-center gap-4 md:gap-5">
+                      <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0 shadow-inner">
+                        <Wallet className="w-6 h-6 md:w-7 md:h-7 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-[10px] md:text-xs font-black text-emerald-100 uppercase tracking-widest mb-0.5 md:mb-1">Omset Hari Ini</h3>
+                        <p className="text-xl md:text-3xl font-black tracking-tighter text-white drop-shadow-sm">Rp {todayRevenue.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-[10px] md:text-xs font-black text-blue-100 uppercase tracking-widest mb-0.5 md:mb-1">Total Omset</h3>
-                      <p className="text-xl md:text-3xl font-black tracking-tighter text-white drop-shadow-sm">Rp {totalRevenue.toLocaleString()}</p>
+                    <div className="text-right flex-shrink-0">
+                      <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 md:px-4 py-1.5 md:py-2 rounded-xl backdrop-blur-md shadow-sm">
+                        <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-100" />
+                        <span className="text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">{todayTrxCount} <span className="hidden sm:inline">Trx Hari Ini</span><span className="sm:hidden">Trx</span></span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 md:px-4 py-1.5 md:py-2 rounded-xl backdrop-blur-md shadow-sm">
-                      <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-300" />
-                      <span className="text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">{totalTrx} <span className="hidden sm:inline">Transaksi Sukses</span><span className="sm:hidden">Trx</span></span>
+
+                  {/* Column 2: Total Semua */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 shadow-xl shadow-blue-500/20 flex items-center justify-between text-white border border-blue-400/30">
+                    <div className="flex items-center gap-4 md:gap-5">
+                      <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0 shadow-inner">
+                        <Wallet className="w-6 h-6 md:w-7 md:h-7 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-[10px] md:text-xs font-black text-blue-100 uppercase tracking-widest mb-0.5 md:mb-1">Total Semua</h3>
+                        <p className="text-xl md:text-3xl font-black tracking-tighter text-white drop-shadow-sm">Rp {totalRevenue.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 md:px-4 py-1.5 md:py-2 rounded-xl backdrop-blur-md shadow-sm">
+                        <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4 text-blue-200" />
+                        <span className="text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">{totalTrx} <span className="hidden sm:inline">Trx Total</span><span className="sm:hidden">Trx</span></span>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -14,7 +14,8 @@ import {
   ChevronUp,
   X,
   LayoutDashboard,
-  FileText
+  FileText,
+  TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -58,6 +59,17 @@ export default function App() {
   const filteredBarang = barang.filter(b =>
     b.nama_barang.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const todayHistory = history.filter(trx => {
+    const trxDate = trx.tanggal?.toDate ? trx.tanggal.toDate() : new Date(trx.tanggal);
+    const today = new Date();
+    return trxDate.getDate() === today.getDate() &&
+           trxDate.getMonth() === today.getMonth() &&
+           trxDate.getFullYear() === today.getFullYear();
+  });
+
+  const todayRevenue = todayHistory.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
+  const todayTrxCount = todayHistory.length;
 
   useEffect(() => {
     let unsub: () => void;
@@ -594,14 +606,29 @@ export default function App() {
               <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase tracking-tighter">Live Audit</span>
             </div>
 
+            <div className="px-4 pt-4">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[1.5rem] p-5 shadow-lg shadow-blue-500/20 flex items-center justify-between text-white border border-blue-400/30">
+                <div>
+                  <h3 className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">Omset Hari Ini</h3>
+                  <p className="text-2xl font-black tracking-tighter drop-shadow-sm">Rp {todayRevenue.toLocaleString()}</p>
+                </div>
+                <div className="text-right">
+                  <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-sm">
+                    <TrendingUp className="w-4 h-4 text-emerald-300" />
+                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">{todayTrxCount} Trx</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-              {history.length === 0 ? (
+              {todayHistory.length === 0 ? (
                 <div className="py-20 text-center text-slate-300">
                   <HistoryIcon className="w-12 h-12 mx-auto mb-3 opacity-10" />
-                  <p className="text-xs font-bold uppercase tracking-widest opacity-40">Belum ada riwayat</p>
+                  <p className="text-xs font-bold uppercase tracking-widest opacity-40">Belum ada riwayat hari ini</p>
                 </div>
               ) : (
-                history.map(trx => (
+                todayHistory.map(trx => (
                   <div key={trx.id} className="group">
                     <button
                       onClick={() => setExpandedTrx(expandedTrx === trx.id ? null : trx.id)}
