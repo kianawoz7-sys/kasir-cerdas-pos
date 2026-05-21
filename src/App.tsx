@@ -345,14 +345,14 @@ export default function App() {
           <section className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
               <div className="md:col-span-12">
-                <label className="block text-[10px] font-black text-slate-400 mb-1.5 md:mb-2 uppercase tracking-widest">Pilih Barang</label>
+                <label className="block text-xl md:text-2xl font-black text-blue-600 mb-2 md:mb-3 uppercase tracking-widest">Pilih Barang</label>
                 <div className="relative group/search">
-                  <div className="relative">
-                    <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within/search:text-blue-500 transition-colors" />
+                  <div className="relative border-2 border-blue-600 rounded-2xl shadow-lg bg-white overflow-visible">
+                    <Search className="absolute left-4 md:left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-900 group-focus-within/search:text-blue-600 transition-colors" />
                     <input
                       type="text"
                       placeholder="Cari nama barang..."
-                      className="w-full h-10 md:h-12 bg-slate-50 border border-slate-200 rounded-xl pl-10 md:pl-11 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-medium text-sm text-slate-700 shadow-sm"
+                      className="w-full h-14 md:h-16 bg-white rounded-2xl pl-14 md:pl-16 pr-14 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:border-blue-700 transition-all font-semibold text-lg md:text-xl text-slate-800 placeholder:text-slate-500 placeholder:font-medium"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onFocus={() => {
@@ -362,13 +362,13 @@ export default function App() {
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery('')}
-                        className="absolute right-12 top-11/2 -translate-y-1/2 p-1 hover:bg-slate-200 rounded-full transition-colors"
+                        className="absolute right-12 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-200 rounded-full transition-colors"
                       >
-                        <X className="w-3 h-3 text-slate-500" />
+                        <X className="w-4 h-4 text-slate-600" />
                       </button>
                     )}
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none">
-                      <ChevronDown className="w-4 h-4" />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                      <ChevronDown className="w-5 h-5" />
                     </div>
                   </div>
 

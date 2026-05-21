@@ -22,8 +22,8 @@ export const customConfirm = (message: string, isDestructive = true): Promise<bo
               resolve(true);
             }}
             className={`px-4 py-2 text-xs font-bold text-white rounded-lg transition-colors ${isDestructive
-              ? 'bg-rose-500 hover:bg-rose-600'
-              : 'bg-blue-600 hover:bg-blue-700'
+                ? 'bg-rose-500 hover:bg-rose-600'
+                : 'bg-blue-600 hover:bg-blue-700'
               }`}
           >
             Ya, Lanjutkan
