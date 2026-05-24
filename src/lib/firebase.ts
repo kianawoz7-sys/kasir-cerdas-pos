@@ -1,24 +1,25 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-// NAH INI YANG DIUBAH (parameter keduanya dihapus) 👇
-export const db = getFirestore(app);
-export const auth = getAuth();
 
-// Validation connection test
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-testConnection();
+// Initialize Firestore with robust Multi-Tab Offline Persistence.
+// IndexedDB is used as the local cache so data is served instantly on
+// subsequent loads, even when the network is slow or unavailable.
+// persistentMultipleTabManager() ensures safe cache-sharing across tabs.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
+
+export const auth = getAuth();
 
 export enum OperationType {
   CREATE = 'create',

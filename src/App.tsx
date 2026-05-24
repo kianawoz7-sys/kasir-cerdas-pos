@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Toaster, toast, useToasterStore } from 'react-hot-toast';
 import {
   Package,
@@ -53,6 +53,12 @@ export default function App() {
   const [expandedTrx, setExpandedTrx] = useState<string | null>(null);
   const [selectedBarangId, setSelectedBarangId] = useState('');
 
+  // Guard against overlapping loadData calls (e.g. fast tab switches or
+  // rapid checkout → reload sequences). With Firestore offline persistence
+  // the SDK will resolve instantly from IndexedDB cache, but the guard
+  // prevents redundant network round-trips when multiple callers fire at once.
+  const dataLoading = useRef(false);
+
   // UBAHAN 1: Izinin state jadi string kosong sementara waktu biar bisa dihapus (backspace)
   const [qtyInput, setQtyInput] = useState<number | ''>(1);
 
@@ -101,12 +107,24 @@ export default function App() {
   }, [user]);
 
   const loadData = async () => {
-    const [b, h] = await Promise.all([
-      posService.getBarang(),
-      posService.getTransaksi()
-    ]);
-    setBarang(b);
-    setHistory(h);
+    // Prevent overlapping fetches. With offline persistence the SDK serves
+    // IndexedDB data immediately, so hangs should not occur — but this guard
+    // ensures we never fire duplicate concurrent requests.
+    if (dataLoading.current) return;
+    dataLoading.current = true;
+    try {
+      const [b, h] = await Promise.all([
+        posService.getBarang(),
+        posService.getTransaksi()
+      ]);
+      setBarang(b);
+      setHistory(h);
+    } catch (e) {
+      console.error('loadData failed:', e);
+      toast.error('Gagal memuat data. Periksa koneksi Anda.', { id: 'load-data-error' });
+    } finally {
+      dataLoading.current = false;
+    }
   };
 
   const login = async () => {
