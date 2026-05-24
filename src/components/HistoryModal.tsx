@@ -87,7 +87,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
       let trxLaba = 0;
       trx.items?.forEach(item => {
-        trxLaba += (item.harga - (item.harga_beli || 0)) * item.jumlah;
+        trxLaba += (item.harga_jual - (item.harga_beli || 0)) * item.jumlah;
       });
       months[monthKey].laba += trxLaba;
     });
@@ -375,7 +375,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                                             </div>
                                             <div className="flex-1 min-w-0">
                                               <p className="font-bold text-slate-800 text-sm truncate uppercase tracking-tight">{item.nama_barang}</p>
-                                              <p className="text-[10px] font-bold text-slate-500">{item.jumlah} x Rp {item.harga.toLocaleString()}</p>
+                                              <p className="text-[10px] font-bold text-slate-500">{item.jumlah} x Rp {item.harga_jual.toLocaleString()}</p>
                                             </div>
                                           </div>
                                           <p className="font-black text-slate-900 text-sm whitespace-nowrap self-end sm:self-auto mt-2 sm:mt-0">
