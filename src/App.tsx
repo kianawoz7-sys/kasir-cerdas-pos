@@ -15,14 +15,21 @@ import {
   X,
   LayoutDashboard,
   FileText,
-  TrendingUp
+  TrendingUp,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { auth, db } from './lib/firebase';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  setPersistence,
+  browserLocalPersistence,
+} from 'firebase/auth';
 import { posService } from './services/posService';
-import { Barang, Transaksi, CartItem, TransaksiItem } from './types';
+import { Barang, Transaksi, CartItem } from './types';
 import { ReceiptModal } from './components/ReceiptModal';
 import { customConfirm } from './utils/confirmDialog';
 import { InventoryModal } from './components/InventoryModal';
@@ -31,6 +38,7 @@ import { HistoryModal } from './components/HistoryModal';
 export default function App() {
   const { toasts } = useToasterStore();
 
+  // Limit visible toasts to 1 at a time
   useEffect(() => {
     toasts
       .filter((t) => t.visible)
@@ -38,45 +46,60 @@ export default function App() {
       .forEach((t) => toast.dismiss(t.id));
   }, [toasts]);
 
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [barang, setBarang] = useState<Barang[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [history, setHistory] = useState<Transaksi[]>([]);
+  // ---------------------------------------------------------------------------
+  // Core state
+  // ---------------------------------------------------------------------------
+  const [user, setUser]             = useState<any>(null);
+  const [loading, setLoading]       = useState(true);
+  const [barang, setBarang]         = useState<Barang[]>([]);
+  const [cart, setCart]             = useState<CartItem[]>([]);
+  const [history, setHistory]       = useState<Transaksi[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // UI States
-  const [showReceipt, setShowReceipt] = useState<Transaksi | null>(null);
-  const [showInventory, setShowInventory] = useState(false);
+  // UI state
+  const [showReceipt, setShowReceipt]         = useState<Transaksi | null>(null);
+  const [showInventory, setShowInventory]     = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [expandedTrx, setExpandedTrx] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [expandedTrx, setExpandedTrx]         = useState<string | null>(null);
   const [selectedBarangId, setSelectedBarangId] = useState('');
+  const [qtyInput, setQtyInput]               = useState<number | ''>(1);
 
-  // Guard against overlapping loadData calls (e.g. fast tab switches or
-  // rapid checkout → reload sequences). With Firestore offline persistence
-  // the SDK will resolve instantly from IndexedDB cache, but the guard
-  // prevents redundant network round-trips when multiple callers fire at once.
-  const dataLoading = useRef(false);
+  // ---------------------------------------------------------------------------
+  // Fetch lock: prevents overlapping loadData / loadFullHistory calls.
+  // With Firestore offline persistence the SDK serves IndexedDB cache
+  // immediately, so the main risk is multiple callers firing at once.
+  // ---------------------------------------------------------------------------
+  const isFetching = useRef(false);
 
-  // UBAHAN 1: Izinin state jadi string kosong sementara waktu biar bisa dihapus (backspace)
-  const [qtyInput, setQtyInput] = useState<number | ''>(1);
-
+  // ---------------------------------------------------------------------------
+  // Derived state
+  // ---------------------------------------------------------------------------
   const filteredBarang = barang.filter(b =>
-    b.nama_barang.toLowerCase().includes(searchQuery.toLowerCase())
+    b.nama_barang.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  // todayHistory is sliced from whatever is in `history`.
+  // On initial load `history` contains only today's records (fast).
+  // After HistoryModal opens `history` contains the full archive (full).
   const todayHistory = history.filter(trx => {
     const trxDate = trx.tanggal?.toDate ? trx.tanggal.toDate() : new Date(trx.tanggal);
-    const today = new Date();
-    return trxDate.getDate() === today.getDate() &&
-           trxDate.getMonth() === today.getMonth() &&
-           trxDate.getFullYear() === today.getFullYear();
+    const today   = new Date();
+    return (
+      trxDate.getDate()     === today.getDate()  &&
+      trxDate.getMonth()    === today.getMonth() &&
+      trxDate.getFullYear() === today.getFullYear()
+    );
   });
 
-  const todayRevenue = todayHistory.reduce((sum, trx) => sum + Number(trx.total_harga), 0);
-  const todayTrxCount = todayHistory.length;
+  const todayRevenue   = todayHistory.reduce((s, t) => s + Number(t.total_harga), 0);
+  const todayTrxCount  = todayHistory.length;
+  const totalBelanja   = cart.reduce((s, i) => s + Number(i.harga) * i.jumlah, 0);
+  const totalQty       = cart.reduce((s, i) => s + i.jumlah, 0);
 
+  // ---------------------------------------------------------------------------
+  // Auth + clock setup (runs once on mount)
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     let unsub: () => void;
 
@@ -87,8 +110,8 @@ export default function App() {
           setLoading(false);
         });
       })
-      .catch((error) => {
-        console.error("Gagal nyimpen sesi login:", error);
+      .catch((err) => {
+        console.error('Gagal nyimpen sesi login:', err);
         setLoading(false);
       });
 
@@ -100,22 +123,24 @@ export default function App() {
     };
   }, []);
 
+  // Trigger initial data load whenever user changes (login / logout)
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
-  }, [user]);
+    if (user) loadData();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---------------------------------------------------------------------------
+  // loadData — INITIAL load (barang + TODAY's transactions only)
+  //
+  // Complexity: O(transactions_today) regardless of archive size.
+  // The N+1 serial-await pattern is gone — subcollection reads are concurrent.
+  // ---------------------------------------------------------------------------
   const loadData = async () => {
-    // Prevent overlapping fetches. With offline persistence the SDK serves
-    // IndexedDB data immediately, so hangs should not occur — but this guard
-    // ensures we never fire duplicate concurrent requests.
-    if (dataLoading.current) return;
-    dataLoading.current = true;
+    if (isFetching.current) return;
+    isFetching.current = true;
     try {
       const [b, h] = await Promise.all([
         posService.getBarang(),
-        posService.getTransaksi()
+        posService.getTransaksiToday(),
       ]);
       setBarang(b);
       setHistory(h);
@@ -123,10 +148,33 @@ export default function App() {
       console.error('loadData failed:', e);
       toast.error('Gagal memuat data. Periksa koneksi Anda.', { id: 'load-data-error' });
     } finally {
-      dataLoading.current = false;
+      isFetching.current = false;
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // loadFullHistory — LAZY load, called only when HistoryModal opens.
+  //
+  // Fetches the entire archive with items resolved concurrently (Promise.all).
+  // The main screen never pays this cost on startup.
+  // ---------------------------------------------------------------------------
+  const loadFullHistory = async () => {
+    if (isFetching.current) return;
+    isFetching.current = true;
+    try {
+      const h = await posService.getTransaksi();
+      setHistory(h);
+    } catch (e) {
+      console.error('loadFullHistory failed:', e);
+      toast.error('Gagal memuat riwayat lengkap.', { id: 'load-data-error' });
+    } finally {
+      isFetching.current = false;
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Auth actions
+  // ---------------------------------------------------------------------------
   const login = async () => {
     toast.remove();
     try {
@@ -145,6 +193,9 @@ export default function App() {
     setHistory([]);
   };
 
+  // ---------------------------------------------------------------------------
+  // Cart actions
+  // ---------------------------------------------------------------------------
   const addToCart = () => {
     toast.remove();
     if (!selectedBarangId) {
@@ -155,9 +206,7 @@ export default function App() {
     const item = barang.find(b => b.id === selectedBarangId);
     if (!item) return;
 
-    // UBAHAN 2: Konversi yang bener biar aman buat dihitung
     const qty = Number(qtyInput);
-
     if (qty <= 0 || isNaN(qty)) {
       toast.error('Jumlah tidak valid!', { id: 'global-pos-toast' });
       return;
@@ -166,7 +215,6 @@ export default function App() {
     const existingIndex = cart.findIndex(c => c.barang_id === item.id);
     if (existingIndex > -1) {
       const newCart = [...cart];
-
       if (newCart[existingIndex].jumlah >= item.stok) {
         toast.error('Batas stok maksimal tercapai!', { id: 'global-pos-toast' });
       } else {
@@ -186,12 +234,12 @@ export default function App() {
         return;
       }
       setCart([...cart, {
-        barang_id: item.id,
+        barang_id:  item.id,
         nama_barang: item.nama_barang,
-        harga_beli: Number(item.harga_beli) || 0,
-        harga: Number(item.harga),
-        jumlah: qty,
-        subtotal: qty * Number(item.harga)
+        harga_beli:  Number(item.harga_beli) || 0,
+        harga:       Number(item.harga),
+        jumlah:      qty,
+        subtotal:    qty * Number(item.harga),
       }]);
     }
 
@@ -211,19 +259,18 @@ export default function App() {
     }
 
     const newCart = [...cart];
-    newCart[index].jumlah = newQty;
+    newCart[index].jumlah  = newQty;
     newCart[index].subtotal = Number(newCart[index].harga) * newQty;
     setCart(newCart);
   };
 
   const removeFromCart = (index: number) => {
-    const newCart = cart.filter((_, i) => i !== index);
-    setCart(newCart);
+    setCart(cart.filter((_, i) => i !== index));
   };
 
-  const totalBelanja = cart.reduce((sum, item) => sum + (Number(item.harga) * item.jumlah), 0);
-  const totalQty = cart.reduce((sum, item) => sum + item.jumlah, 0);
-
+  // ---------------------------------------------------------------------------
+  // Checkout
+  // ---------------------------------------------------------------------------
   const handleCheckout = async () => {
     toast.remove();
     if (cart.length === 0) {
@@ -231,27 +278,26 @@ export default function App() {
       return;
     }
 
-    const total_harga = totalBelanja;
     toast.loading('Memproses transaksi...', { id: 'global-pos-toast' });
     try {
-      const result = await posService.checkout({
-        total_harga: total_harga,
-        total_qty: totalQty,
-        status: 'completed'
-      }, cart);
+      const result = await posService.checkout(
+        { total_harga: totalBelanja, total_qty: totalQty, status: 'completed' },
+        cart,
+      );
 
       toast.success('Transaksi Berhasil!', { id: 'global-pos-toast' });
 
+      // Reload today's data to refresh sidebar + stock counts.
       await loadData();
 
       const fullTrx: Transaksi = {
-        id: result.id,
+        id:           result.id,
         no_transaksi: result.no_transaksi,
-        total_harga: total_harga,
-        total_qty: totalQty,
-        status: 'completed',
-        tanggal: result.tanggal,
-        items: cart
+        total_harga:  totalBelanja,
+        total_qty:    totalQty,
+        status:       'completed',
+        tanggal:      result.tanggal,
+        items:        cart,
       };
 
       setShowReceipt(fullTrx);
@@ -261,6 +307,9 @@ export default function App() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Delete transaction from today's sidebar
+  // ---------------------------------------------------------------------------
   const handleDeleteTrx = async (trx: Transaksi) => {
     const isConfirmed = await customConfirm('Hapus transaksi ini? Stok akan dikembalikan.');
     if (!isConfirmed) return;
@@ -271,13 +320,16 @@ export default function App() {
     try {
       await posService.deleteTransaksi(trx);
       toast.success('Transaksi dihapus', { id: 'global-pos-toast', duration: 1500 });
-      // Delay to avoid UI blocking toast
+      // Small delay so the success toast is visible before the list reloads
       setTimeout(() => loadData(), 100);
     } catch (e) {
       toast.error('Gagal menghapus', { id: 'global-pos-toast', duration: 1500 });
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Render — loading / unauthenticated guards
+  // ---------------------------------------------------------------------------
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="animate-pulse flex flex-col items-center">
@@ -309,13 +361,16 @@ export default function App() {
     </div>
   );
 
+  // ---------------------------------------------------------------------------
+  // Render — main app
+  // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
-      <Toaster
-        position="top-center"
-        toastOptions={{ duration: 1500 }}
-      />
+      <Toaster position="top-center" toastOptions={{ duration: 1500 }} />
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Header                                                               */}
+      {/* ------------------------------------------------------------------ */}
       <header className="flex items-center justify-between px-4 md:px-8 py-2.5 md:py-4 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-2 md:gap-3">
           <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-lg md:text-xl shadow-lg shadow-blue-200">K</div>
@@ -331,8 +386,12 @@ export default function App() {
             <p className="text-xs text-slate-500 font-mono tracking-tighter">{format(currentTime, 'HH:mm:ss')}</p>
           </div>
           <div className="flex items-center gap-1.5 md:gap-2">
+            {/* History modal button — triggers lazy full-history fetch */}
             <button
-              onClick={() => setShowHistoryModal(true)}
+              onClick={() => {
+                setShowHistoryModal(true);
+                loadFullHistory();
+              }}
               className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
               title="Semua Transaksi & Rekap"
             >
@@ -345,7 +404,7 @@ export default function App() {
             >
               <Package className="w-4 h-4 md:w-5 md:h-5" />
             </button>
-            <div className="h-6 md:h-8 w-[1px] bg-slate-200 mx-0.5 md:mx-1"></div>
+            <div className="h-6 md:h-8 w-[1px] bg-slate-200 mx-0.5 md:mx-1" />
             <button
               onClick={logout}
               className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-white shadow-md hover:border-blue-200 transition-all active:scale-95"
@@ -357,9 +416,15 @@ export default function App() {
         </div>
       </header>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Main content                                                         */}
+      {/* ------------------------------------------------------------------ */}
       <main className="flex-1 max-w-[1440px] mx-auto w-full px-4 md:px-8 py-4 md:py-8 grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 overflow-x-hidden">
 
+        {/* Left column: Product selector + cart */}
         <div className="lg:col-span-8 space-y-4 md:space-y-6">
+
+          {/* Product search */}
           <section className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
               <div className="md:col-span-12">
@@ -373,9 +438,6 @@ export default function App() {
                       className="w-full h-14 md:h-16 bg-white rounded-2xl pl-14 md:pl-16 pr-14 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:border-blue-700 transition-all font-semibold text-lg md:text-xl text-slate-800 placeholder:text-slate-500 placeholder:font-medium"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      onFocus={() => {
-                        if (searchQuery === '') setSearchQuery('');
-                      }}
                     />
                     {searchQuery && (
                       <button
@@ -434,6 +496,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Selected item quantity row */}
               <AnimatePresence>
                 {selectedBarangId && (
                   <motion.div
@@ -458,37 +521,30 @@ export default function App() {
                         <div className="flex flex-col items-start sm:items-end w-full sm:w-auto">
                           <label className="text-[9px] font-black text-slate-400 uppercase mb-1">Jumlah</label>
                           <div className="flex items-center bg-white rounded-xl p-0.5 border border-blue-200">
-
-                            {/* UBAHAN 3: Update minus button */}
                             <button
                               onClick={() => setQtyInput(Math.max(1, Number(qtyInput) - 1))}
                               className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
-
-                            {/* UBAHAN 4: Input ajaib anti paten-paten club */}
                             <input
                               type="number"
                               className="w-12 text-center font-black text-sm text-slate-800 bg-transparent focus:outline-none"
                               value={qtyInput}
-                              onFocus={(e) => e.target.select()} // Langsung block semua text pas diklik
+                              onFocus={(e) => e.target.select()}
                               onBlur={() => {
-                                // Kalo pas ditinggalin inputnya kosong / 0, otomatis balikin ke 1
                                 if (qtyInput === '' || Number(qtyInput) <= 0) setQtyInput(1);
                               }}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 if (val === '') {
-                                  setQtyInput(''); // Bolehin kosong pas lagi dihapus
+                                  setQtyInput('');
                                 } else {
                                   const parsed = parseInt(val);
                                   setQtyInput(isNaN(parsed) ? '' : parsed);
                                 }
                               }}
                             />
-
-                            {/* UBAHAN 5: Update plus button */}
                             <button
                               onClick={() => setQtyInput(Number(qtyInput) + 1)}
                               className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
@@ -517,6 +573,7 @@ export default function App() {
             </div>
           </section>
 
+          {/* Cart */}
           <section className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Daftar Pesanan</h2>
@@ -601,6 +658,7 @@ export default function App() {
               )}
             </div>
 
+            {/* Checkout bar */}
             <div className="p-4 sm:p-6 bg-slate-900 flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
               <div className="text-center sm:text-left">
                 <p className="text-[10px] text-slate-400 uppercase font-black tracking-[0.2em] mb-1">Total Pembayaran</p>
@@ -617,6 +675,7 @@ export default function App() {
           </section>
         </div>
 
+        {/* Right column: Today's history sidebar */}
         <div className="lg:col-span-4 flex flex-col gap-4 md:gap-6">
           <section className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
             <div className="px-4 md:px-5 py-3 md:py-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
@@ -624,6 +683,7 @@ export default function App() {
               <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase tracking-tighter">Live Audit</span>
             </div>
 
+            {/* Today's revenue summary */}
             <div className="px-4 pt-4">
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[1.5rem] p-5 shadow-lg shadow-blue-500/20 flex items-center justify-between text-white border border-blue-400/30">
                 <div>
@@ -639,6 +699,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Today's transaction list */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
               {todayHistory.length === 0 ? (
                 <div className="py-20 text-center text-slate-300">
@@ -650,11 +711,14 @@ export default function App() {
                   <div key={trx.id} className="group">
                     <button
                       onClick={() => setExpandedTrx(expandedTrx === trx.id ? null : trx.id)}
-                      className={`w-full p-4 rounded-2xl transition-all border ${expandedTrx === trx.id ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-50' : 'bg-slate-50/50 border-slate-100 hover:bg-white hover:border-slate-200 hover:shadow-sm'}`}
+                      className={`w-full p-4 rounded-2xl transition-all border ${expandedTrx === trx.id
+                        ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-50'
+                        : 'bg-slate-50/50 border-slate-100 hover:bg-white hover:border-slate-200 hover:shadow-sm'
+                      }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${expandedTrx === trx.id ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                          <div className={`w-2 h-2 rounded-full ${expandedTrx === trx.id ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
                           <span className="text-[10px] font-black text-slate-400 tracking-wider">#{trx.no_transaksi.split('-').pop()}</span>
                         </div>
                         <span className="text-[10px] font-bold text-slate-400 font-mono italic">
@@ -664,7 +728,9 @@ export default function App() {
                       <div className="flex justify-between items-end">
                         <p className="font-black text-lg text-slate-900 tracking-tight">Rp {trx.total_harga.toLocaleString()}</p>
                         <div className="p-1.5 rounded-full bg-white shadow-sm border border-slate-100">
-                          {expandedTrx === trx.id ? <ChevronUp className="w-3.5 h-3.5 text-blue-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                          {expandedTrx === trx.id
+                            ? <ChevronUp className="w-3.5 h-3.5 text-blue-500" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                         </div>
                       </div>
                     </button>
@@ -681,7 +747,9 @@ export default function App() {
                             <div className="space-y-1.5 opacity-80">
                               {trx.items?.map((item, i) => (
                                 <div key={i} className="flex justify-between text-[11px] font-medium text-slate-600">
-                                  <span className="flex-1 truncate pr-4">{item.nama_barang} <span className="text-slate-400 font-bold ml-1">x{item.jumlah}</span></span>
+                                  <span className="flex-1 truncate pr-4">
+                                    {item.nama_barang} <span className="text-slate-400 font-bold ml-1">x{item.jumlah}</span>
+                                  </span>
                                   <span className="font-bold font-mono">Rp {item.subtotal.toLocaleString()}</span>
                                 </div>
                               ))}
@@ -713,10 +781,13 @@ export default function App() {
         </div>
       </main>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Footer                                                               */}
+      {/* ------------------------------------------------------------------ */}
       <footer className="px-8 py-3 bg-white border-t border-slate-200 flex justify-between items-center sticky bottom-0 z-30">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Online</span>
           </div>
           <span className="text-slate-200">|</span>
@@ -728,6 +799,9 @@ export default function App() {
         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">KASIR CERDAS © 2025</p>
       </footer>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Modals                                                               */}
+      {/* ------------------------------------------------------------------ */}
       <AnimatePresence>
         {showReceipt && (
           <ReceiptModal
@@ -748,8 +822,19 @@ export default function App() {
         {showHistoryModal && (
           <HistoryModal
             history={history}
-            onClose={() => setShowHistoryModal(false)}
-            onDelete={loadData}
+            isLoadingHistory={isFetching.current}
+            onClose={() => {
+              setShowHistoryModal(false);
+              // Reset history back to today-only after closing the modal so the
+              // sidebar stays accurate and we don't keep the full archive in RAM.
+              loadData();
+            }}
+            onDelete={async () => {
+              // Sequential — both share the isFetching lock, so parallel calls
+              // would cause the second to bail out immediately.
+              await loadFullHistory();
+              await loadData();
+            }}
             onShowReceipt={(trx) => {
               setShowHistoryModal(false);
               setShowReceipt(trx);

@@ -12,20 +12,34 @@ import {
   increment,
   getDoc,
   setDoc,
-  writeBatch
+  writeBatch,
+  Timestamp,
+  where,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Barang, Transaksi, TransaksiItem } from '../types';
 import { format } from 'date-fns';
 
-const BARANG_COL = 'barang';
+const BARANG_COL    = 'barang';
 const TRANSAKSI_COL = 'transaksi';
-const COUNTERS_COL = 'counters';
+const COUNTERS_COL  = 'counters';
+
+// ---------------------------------------------------------------------------
+// Helper: fetch a single transaksi doc + its items subcollection in parallel.
+// Used inside Promise.all so multiple transactions resolve concurrently.
+// ---------------------------------------------------------------------------
+async function fetchTrxWithItems(d: any): Promise<Transaksi> {
+  const itemsSnap = await getDocs(collection(db, `${TRANSAKSI_COL}/${d.id}/items`));
+  const items = itemsSnap.docs.map(idoc => ({ id: idoc.id, ...idoc.data() } as TransaksiItem));
+  return { id: d.id, ...d.data(), items } as Transaksi;
+}
 
 export const posService = {
-  // ==========================================
+
+  // ==========================================================================
   // BARANG
-  // ==========================================
+  // ==========================================================================
+
   async getBarang(): Promise<Barang[]> {
     try {
       const q = query(collection(db, BARANG_COL), orderBy('nama_barang', 'asc'));
@@ -41,7 +55,7 @@ export const posService = {
     try {
       await addDoc(collection(db, BARANG_COL), {
         ...barang,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
       });
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, BARANG_COL);
@@ -64,20 +78,19 @@ export const posService = {
     }
   },
 
-  // ==========================================
+  // ==========================================================================
   // TRANSAKSI NUMBER GENERATOR
-  // ==========================================
+  // ==========================================================================
+
   async generateTrxNumber(): Promise<string> {
-    const today = format(new Date(), 'yyyyMMdd');
+    const today      = format(new Date(), 'yyyyMMdd');
     const counterRef = doc(db, COUNTERS_COL, today);
 
     try {
       return await runTransaction(db, async (transaction) => {
-        // READ
         const counterDoc = await transaction.get(counterRef);
         let newCount = 1;
 
-        // WRITE
         if (counterDoc.exists()) {
           newCount = counterDoc.data().count + 1;
           transaction.update(counterRef, { count: newCount });
@@ -93,20 +106,23 @@ export const posService = {
     }
   },
 
-  // ==========================================
-  // CHECKOUT TRANSAKSI
-  // ==========================================
-  async checkout(trxData: Omit<Transaksi, 'id' | 'tanggal' | 'no_transaksi'>, items: TransaksiItem[]) {
+  // ==========================================================================
+  // CHECKOUT
+  // ==========================================================================
+
+  async checkout(
+    trxData: Omit<Transaksi, 'id' | 'tanggal' | 'no_transaksi'>,
+    items: TransaksiItem[],
+  ) {
     try {
       const trxNumber = await this.generateTrxNumber();
 
       return await runTransaction(db, async (transaction) => {
-        const trxRef = doc(collection(db, TRANSAKSI_COL));
+        const trxRef    = doc(collection(db, TRANSAKSI_COL));
         const timestamp = new Date();
-        const barangRefsToUpdate = [];
+        const barangRefsToUpdate: { ref: any; jumlah: number }[] = [];
 
-        // --- FASE 1: READS ---
-        // Baca SEMUA data barang dulu buat ngecek stok
+        // --- FASE 1: READS (all reads must precede writes in a transaction) ---
         for (const item of items) {
           const barangRef = doc(db, BARANG_COL, item.barang_id);
           const barangDoc = await transaction.get(barangRef);
@@ -120,17 +136,16 @@ export const posService = {
             throw new Error(`Stok ${item.nama_barang} tidak mencukupi. Sisa: ${currentStok}`);
           }
 
-          // Simpan referensi buat Fase Tulis nanti
           barangRefsToUpdate.push({ ref: barangRef, jumlah: item.jumlah });
         }
 
         // --- FASE 2: WRITES ---
-        // 1. Tulis doc transaksi utama
+        // 1. Tulis dokumen transaksi utama
         transaction.set(trxRef, {
           ...trxData,
           no_transaksi: trxNumber,
           tanggal: timestamp,
-          status: 'completed'
+          status: 'completed',
         });
 
         // 2. Tulis ke subcollection items
@@ -141,9 +156,7 @@ export const posService = {
 
         // 3. Potong stok barang
         for (const b of barangRefsToUpdate) {
-          transaction.update(b.ref, {
-            stok: increment(-b.jumlah)
-          });
+          transaction.update(b.ref, { stok: increment(-b.jumlah) });
         }
 
         return { id: trxRef.id, no_transaksi: trxNumber, tanggal: timestamp };
@@ -154,44 +167,69 @@ export const posService = {
     }
   },
 
-  // ==========================================
-  // HISTORY TRANSAKSI
-  // ==========================================
+  // ==========================================================================
+  // HISTORY — TODAY ONLY (used for initial app load)
+  // ==========================================================================
+  // Queries only today's documents so startup cost is O(n_today) regardless
+  // of the total size of the archive. Items are resolved concurrently via
+  // Promise.all, eliminating the N+1 sequential-await pattern.
+
+  async getTransaksiToday(): Promise<Transaksi[]> {
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const q = query(
+        collection(db, TRANSAKSI_COL),
+        where('tanggal', '>=', Timestamp.fromDate(startOfDay)),
+        orderBy('tanggal', 'desc'),
+      );
+      const snapshot = await getDocs(q);
+
+      // All subcollection reads fire concurrently — not sequentially.
+      return await Promise.all(snapshot.docs.map(fetchTrxWithItems));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, `${TRANSAKSI_COL}[today]`);
+      return [];
+    }
+  },
+
+  // ==========================================================================
+  // HISTORY — ALL (used lazily when HistoryModal opens)
+  // ==========================================================================
+  // Fetches the entire archive. Items are resolved concurrently via Promise.all
+  // so 30 transactions = 1 batch of parallel requests, not 30 serial awaits.
+
   async getTransaksi(): Promise<Transaksi[]> {
     try {
-      const q = query(collection(db, TRANSAKSI_COL), orderBy('tanggal', 'desc'));
+      const q        = query(collection(db, TRANSAKSI_COL), orderBy('tanggal', 'desc'));
       const snapshot = await getDocs(q);
-      const trxList: Transaksi[] = [];
 
-      for (const d of snapshot.docs) {
-        const itemsSnap = await getDocs(collection(db, `${TRANSAKSI_COL}/${d.id}/items`));
-        const items = itemsSnap.docs.map(idoc => ({ id: idoc.id, ...idoc.data() } as TransaksiItem));
-        trxList.push({ id: d.id, ...d.data(), items } as Transaksi);
-      }
-
-      return trxList;
+      // Fire ALL subcollection reads concurrently instead of sequentially.
+      return await Promise.all(snapshot.docs.map(fetchTrxWithItems));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, TRANSAKSI_COL);
       return [];
     }
   },
 
+  // ==========================================================================
+  // DELETE TRANSAKSI
+  // ==========================================================================
+
   async deleteTransaksi(trx: Transaksi) {
     try {
-      // BACA data subcollection DULU sebelum mulai transaksi tulis
+      // Read the subcollection first (outside the batch — batches are write-only)
       const itemsSnap = await getDocs(collection(db, `${TRANSAKSI_COL}/${trx.id}/items`));
 
-      // Pake writeBatch karena kita cuma mau ngelakuin operasi TULIS (Hapus & Balikin Stok)
-      // Gak perlu runTransaction kalo gak ada operasi BACA di dalemnya
+      // writeBatch: all writes (delete + stock restore) are atomic
       const batch = writeBatch(db);
 
       // 1. Kembalikan stok barang
       if (trx.items) {
         for (const item of trx.items) {
           const barangRef = doc(db, BARANG_COL, item.barang_id);
-          batch.update(barangRef, {
-            stok: increment(item.jumlah)
-          });
+          batch.update(barangRef, { stok: increment(item.jumlah) });
         }
       }
 
@@ -200,15 +238,13 @@ export const posService = {
         batch.delete(itemDoc.ref);
       }
 
-      // 3. Hapus document transaksi utamanya
+      // 3. Hapus dokumen transaksi utama
       batch.delete(doc(db, TRANSAKSI_COL, trx.id));
 
-      // Eksekusi semua hapus & balikin stok secara bersamaan
       await batch.commit();
-
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, TRANSAKSI_COL);
       throw e;
     }
-  }
+  },
 };
