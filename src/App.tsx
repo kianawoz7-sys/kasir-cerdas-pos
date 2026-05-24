@@ -49,21 +49,21 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // Core state
   // ---------------------------------------------------------------------------
-  const [user, setUser]             = useState<any>(null);
-  const [loading, setLoading]       = useState(true);
-  const [barang, setBarang]         = useState<Barang[]>([]);
-  const [cart, setCart]             = useState<CartItem[]>([]);
-  const [history, setHistory]       = useState<Transaksi[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [barang, setBarang] = useState<Barang[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [history, setHistory] = useState<Transaksi[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // UI state
-  const [showReceipt, setShowReceipt]         = useState<Transaksi | null>(null);
-  const [showInventory, setShowInventory]     = useState(false);
+  const [showReceipt, setShowReceipt] = useState<Transaksi | null>(null);
+  const [showInventory, setShowInventory] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [searchQuery, setSearchQuery]         = useState('');
-  const [expandedTrx, setExpandedTrx]         = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedTrx, setExpandedTrx] = useState<string | null>(null);
   const [selectedBarangId, setSelectedBarangId] = useState('');
-  const [qtyInput, setQtyInput]               = useState<number | ''>(1);
+  const [qtyInput, setQtyInput] = useState<number | ''>(1);
 
   // ---------------------------------------------------------------------------
   // Fetch lock: prevents overlapping loadData / loadFullHistory calls.
@@ -84,18 +84,18 @@ export default function App() {
   // After HistoryModal opens `history` contains the full archive (full).
   const todayHistory = history.filter(trx => {
     const trxDate = trx.tanggal?.toDate ? trx.tanggal.toDate() : new Date(trx.tanggal);
-    const today   = new Date();
+    const today = new Date();
     return (
-      trxDate.getDate()     === today.getDate()  &&
-      trxDate.getMonth()    === today.getMonth() &&
+      trxDate.getDate() === today.getDate() &&
+      trxDate.getMonth() === today.getMonth() &&
       trxDate.getFullYear() === today.getFullYear()
     );
   });
 
-  const todayRevenue   = todayHistory.reduce((s, t) => s + Number(t.total_harga), 0);
-  const todayTrxCount  = todayHistory.length;
-  const totalBelanja   = cart.reduce((s, i) => s + Number(i.harga) * i.jumlah, 0);
-  const totalQty       = cart.reduce((s, i) => s + i.jumlah, 0);
+  const todayRevenue = todayHistory.reduce((s, t) => s + Number(t.total_harga), 0);
+  const todayTrxCount = todayHistory.length;
+  const totalBelanja = cart.reduce((s, i) => s + Number(i.harga) * i.jumlah, 0);
+  const totalQty = cart.reduce((s, i) => s + i.jumlah, 0);
 
   // ---------------------------------------------------------------------------
   // Auth + clock setup (runs once on mount)
@@ -234,12 +234,12 @@ export default function App() {
         return;
       }
       setCart([...cart, {
-        barang_id:  item.id,
+        barang_id: item.id,
         nama_barang: item.nama_barang,
-        harga_beli:  Number(item.harga_beli) || 0,
-        harga:       Number(item.harga),
-        jumlah:      qty,
-        subtotal:    qty * Number(item.harga),
+        harga_beli: Number(item.harga_beli) || 0,
+        harga: Number(item.harga),
+        jumlah: qty,
+        subtotal: qty * Number(item.harga),
       }]);
     }
 
@@ -259,7 +259,7 @@ export default function App() {
     }
 
     const newCart = [...cart];
-    newCart[index].jumlah  = newQty;
+    newCart[index].jumlah = newQty;
     newCart[index].subtotal = Number(newCart[index].harga) * newQty;
     setCart(newCart);
   };
@@ -291,13 +291,13 @@ export default function App() {
       await loadData();
 
       const fullTrx: Transaksi = {
-        id:           result.id,
+        id: result.id,
         no_transaksi: result.no_transaksi,
-        total_harga:  totalBelanja,
-        total_qty:    totalQty,
-        status:       'completed',
-        tanggal:      result.tanggal,
-        items:        cart,
+        total_harga: totalBelanja,
+        total_qty: totalQty,
+        status: 'completed',
+        tanggal: result.tanggal,
+        items: cart,
       };
 
       setShowReceipt(fullTrx);
@@ -392,14 +392,14 @@ export default function App() {
                 setShowHistoryModal(true);
                 loadFullHistory();
               }}
-              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
+              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white hover:bg-indigo-700 transition-all active:scale-95 shadow-md"
               title="Semua Transaksi & Rekap"
             >
               <FileText className="w-4 h-4 md:w-5 md:h-5" />
             </button>
             <button
               onClick={() => setShowInventory(true)}
-              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 shadow-sm"
+              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white hover:bg-emerald-700 transition-all active:scale-95 shadow-md"
               title="Inventaris"
             >
               <Package className="w-4 h-4 md:w-5 md:h-5" />
@@ -714,7 +714,7 @@ export default function App() {
                       className={`w-full p-4 rounded-2xl transition-all border ${expandedTrx === trx.id
                         ? 'bg-white border-blue-200 shadow-md ring-1 ring-blue-50'
                         : 'bg-slate-50/50 border-slate-100 hover:bg-white hover:border-slate-200 hover:shadow-sm'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
