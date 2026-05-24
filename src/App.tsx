@@ -392,11 +392,11 @@ export default function App() {
             {/* Smart Stock-In (Scan) */}
             <button
               onClick={() => setIsSmartStockInOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 md:px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-md transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-md transition-all active:scale-95"
               title="Scan Nota"
             >
-              <Scan className="w-4 h-4 md:w-5 md:h-5" />
-              <span className="text-xs md:text-sm whitespace-nowrap">Scan Nota</span>
+              <Scan className="w-5 h-5 md:w-5 md:h-5" />
+              <span className="hidden md:inline text-sm whitespace-nowrap">Scan Nota</span>
             </button>
             {/* History modal button */}
             <button
@@ -404,19 +404,19 @@ export default function App() {
                 setShowHistoryModal(true);
                 loadFullHistory();
               }}
-              className="flex items-center gap-2 px-3 py-2 md:px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md transition-all active:scale-95"
               title="Semua Transaksi & Rekap"
             >
-              <FileText className="w-4 h-4 md:w-5 md:h-5" />
-              <span className="text-xs md:text-sm whitespace-nowrap">Riwayat</span>
+              <FileText className="w-5 h-5 md:w-5 md:h-5" />
+              <span className="hidden md:inline text-sm whitespace-nowrap">Riwayat</span>
             </button>
             <button
               onClick={() => setShowInventory(true)}
-              className="flex items-center gap-2 px-3 py-2 md:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition-all active:scale-95"
               title="Inventaris"
             >
-              <Package className="w-4 h-4 md:w-5 md:h-5" />
-              <span className="text-xs md:text-sm whitespace-nowrap">Gudang</span>
+              <Package className="w-5 h-5 md:w-5 md:h-5" />
+              <span className="hidden md:inline text-sm whitespace-nowrap">Gudang</span>
             </button>
             <div className="h-6 md:h-8 w-[1px] bg-slate-200 mx-0.5 md:mx-1" />
             <button

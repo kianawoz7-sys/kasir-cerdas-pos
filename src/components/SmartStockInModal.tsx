@@ -44,6 +44,10 @@ export const SmartStockInModal: React.FC<Props> = ({ onClose, inventory }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("File harus berupa gambar.", { id: 'file-type-error' });
+        return;
+      }
       setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setImagePreview(url);
@@ -368,7 +372,6 @@ export const SmartStockInModal: React.FC<Props> = ({ onClose, inventory }) => {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     className="sr-only"
                     id="camera-input"
                     onChange={handleFileChange}
