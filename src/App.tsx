@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   FileText,
   TrendingUp,
+  Scan,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -34,6 +35,7 @@ import { ReceiptModal } from './components/ReceiptModal';
 import { customConfirm } from './utils/confirmDialog';
 import { InventoryModal } from './components/InventoryModal';
 import { HistoryModal } from './components/HistoryModal';
+import { SmartStockInModal } from './components/SmartStockInModal';
 
 export default function App() {
   const { toasts } = useToasterStore();
@@ -60,6 +62,7 @@ export default function App() {
   const [showReceipt, setShowReceipt] = useState<Transaksi | null>(null);
   const [showInventory, setShowInventory] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isSmartStockInOpen, setIsSmartStockInOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTrx, setExpandedTrx] = useState<string | null>(null);
   const [selectedBarangId, setSelectedBarangId] = useState('');
@@ -94,7 +97,7 @@ export default function App() {
 
   const todayRevenue = todayHistory.reduce((s, t) => s + Number(t.total_harga), 0);
   const todayTrxCount = todayHistory.length;
-  const totalBelanja = cart.reduce((s, i) => s + Number(i.harga) * i.jumlah, 0);
+  const totalBelanja = cart.reduce((s, i) => s + Number(i.harga_jual) * i.jumlah, 0);
   const totalQty = cart.reduce((s, i) => s + i.jumlah, 0);
 
   // ---------------------------------------------------------------------------
@@ -225,7 +228,7 @@ export default function App() {
         } else {
           newCart[existingIndex].jumlah = newQty;
         }
-        newCart[existingIndex].subtotal = Number(item.harga) * newCart[existingIndex].jumlah;
+        newCart[existingIndex].subtotal = Number(item.harga_jual) * newCart[existingIndex].jumlah;
         setCart(newCart);
       }
     } else {
@@ -237,9 +240,9 @@ export default function App() {
         barang_id: item.id,
         nama_barang: item.nama_barang,
         harga_beli: Number(item.harga_beli) || 0,
-        harga: Number(item.harga),
+        harga_jual: Number(item.harga_jual),
         jumlah: qty,
-        subtotal: qty * Number(item.harga),
+        subtotal: qty * Number(item.harga_jual),
       }]);
     }
 
@@ -260,7 +263,7 @@ export default function App() {
 
     const newCart = [...cart];
     newCart[index].jumlah = newQty;
-    newCart[index].subtotal = Number(newCart[index].harga) * newQty;
+    newCart[index].subtotal = Number(newCart[index].harga_jual) * newQty;
     setCart(newCart);
   };
 
@@ -386,23 +389,34 @@ export default function App() {
             <p className="text-xs text-slate-500 font-mono tracking-tighter">{format(currentTime, 'HH:mm:ss')}</p>
           </div>
           <div className="flex items-center gap-1.5 md:gap-2">
-            {/* History modal button — triggers lazy full-history fetch */}
+            {/* Smart Stock-In (Scan) */}
+            <button
+              onClick={() => setIsSmartStockInOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 md:px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-md transition-all active:scale-95"
+              title="Scan Nota"
+            >
+              <Scan className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-xs md:text-sm whitespace-nowrap">Scan Nota</span>
+            </button>
+            {/* History modal button */}
             <button
               onClick={() => {
                 setShowHistoryModal(true);
                 loadFullHistory();
               }}
-              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white hover:bg-indigo-700 transition-all active:scale-95 shadow-md"
+              className="flex items-center gap-2 px-3 py-2 md:px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md transition-all active:scale-95"
               title="Semua Transaksi & Rekap"
             >
               <FileText className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-xs md:text-sm whitespace-nowrap">Riwayat</span>
             </button>
             <button
               onClick={() => setShowInventory(true)}
-              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white hover:bg-emerald-700 transition-all active:scale-95 shadow-md"
+              className="flex items-center gap-2 px-3 py-2 md:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition-all active:scale-95"
               title="Inventaris"
             >
               <Package className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-xs md:text-sm whitespace-nowrap">Gudang</span>
             </button>
             <div className="h-6 md:h-8 w-[1px] bg-slate-200 mx-0.5 md:mx-1" />
             <button
@@ -474,7 +488,7 @@ export default function App() {
                             >
                               <div className="flex flex-col items-start">
                                 <span className="font-bold text-slate-800 text-sm">{item.nama_barang}</span>
-                                <span className="text-[10px] font-black uppercase text-blue-500 tracking-widest">Rp {item.harga.toLocaleString()}</span>
+                                <span className="text-[10px] font-black uppercase text-blue-500 tracking-widest">Rp {item.harga_jual.toLocaleString()}</span>
                               </div>
                               <div className="flex flex-col items-end">
                                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${item.stok > 10 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
@@ -619,7 +633,7 @@ export default function App() {
                           <p className="font-bold text-slate-800 text-base">{item.nama_barang}</p>
                         </td>
                         <td className="px-6 py-5 text-center text-slate-500 font-medium whitespace-nowrap">
-                          Rp {item.harga.toLocaleString()}
+                          Rp {item.harga_jual.toLocaleString()}
                         </td>
                         <td className="px-6 py-5">
                           <div className="flex items-center justify-center bg-slate-100/80 rounded-xl p-1 w-fit mx-auto">
@@ -840,6 +854,10 @@ export default function App() {
               setShowReceipt(trx);
             }}
           />
+        )}
+
+        {isSmartStockInOpen && (
+          <SmartStockInModal onClose={() => setIsSmartStockInOpen(false)} inventory={barang} />
         )}
       </AnimatePresence>
     </div>

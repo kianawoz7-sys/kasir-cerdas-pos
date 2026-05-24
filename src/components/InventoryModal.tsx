@@ -105,7 +105,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
   const [form, setForm] = useState({
     nama_barang: '',
     harga_beli: 0,
-    harga: 0,
+    harga_jual: 0,
     stok: 0,
   });
 
@@ -153,21 +153,13 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
       return { ok: false, reason: 'block' };
     }
 
-    // 3. Harga Jual must be > 0
-    if (!f.harga || f.harga <= 0) {
-      toast.error('Harga Jual tidak boleh Rp 0.', {
-        id: 'global-pos-toast',
-        duration: 3000,
-      });
+    if (!f.harga_jual || f.harga_jual <= 0) {
+      toast.error('Harga jual wajib diisi');
       return { ok: false, reason: 'block' };
     }
 
-    // 4. Harga Jual should not be lower than Harga Beli (loss-making entry)
-    if (f.harga < f.harga_beli) {
-      toast.error(
-        'Harga Jual lebih rendah dari Harga Beli! Periksa kembali harga Anda.',
-        { id: 'global-pos-toast', duration: 3000 },
-      );
+    if (f.harga_jual < f.harga_beli) {
+      toast.error('Harga jual tidak boleh lebih kecil dari Modal / Harga Beli', { duration: 4000 });
       return { ok: false, reason: 'block' };
     }
 
@@ -223,15 +215,12 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
         });
         return;
       }
-      if (!form.harga || form.harga <= 0) {
-        toast.error('Harga Jual tidak boleh Rp 0.', { id: 'global-pos-toast', duration: 3000 });
+      if (!form.harga_jual || form.harga_jual <= 0) {
+        toast.error('Harga jual wajib diisi');
         return;
       }
-      if (form.harga < form.harga_beli) {
-        toast.error('Harga Jual lebih rendah dari Harga Beli! Periksa kembali harga Anda.', {
-          id: 'global-pos-toast',
-          duration: 3000,
-        });
+      if (form.harga_jual < form.harga_beli) {
+        toast.error('Harga jual tidak boleh lebih kecil dari Modal / Harga Beli', { duration: 4000 });
         return;
       }
       await persistSave(form, editingId);
@@ -261,10 +250,10 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
         await posService.updateBarang(id, f);
         toast.success('Barang diperbarui', { id: 'global-pos-toast', duration: 1500 });
       } else {
-        await posService.addBarang(f);
+        await posService.addBarang({ ...f, aliases: [], schema_version: 2 });
         toast.success('Barang ditambahkan', { id: 'global-pos-toast', duration: 1500 });
       }
-      setForm({ nama_barang: '', harga_beli: 0, harga: 0, stok: 0 });
+      setForm({ nama_barang: '', harga_beli: 0, harga_jual: 0, stok: 0 });
       setEditingId(null);
       setFuzzyWarning(null);
       setTimeout(() => loadItems(), 100);
@@ -299,7 +288,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
     setForm({
       nama_barang: item.nama_barang,
       harga_beli:  item.harga_beli || 0,
-      harga:       item.harga,
+      harga_jual:  item.harga_jual,
       stok:        item.stok,
     });
     setTimeout(() => {
@@ -340,13 +329,14 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
     const doc     = new jsPDF();
     const dateStr = format(new Date(), 'dd MMM yyyy HH:mm');
 
-    const totalValuasi = items.reduce(
-      (sum, item) => sum + (Number(item.harga_beli || 0) * Number(item.stok)),
-      0,
+    const totalAsetJual = filteredItems.reduce(
+      (sum, item) => sum + (Number(item.harga_jual) * Number(item.stok)),
+      0
     );
-    const totalPotensiKeuntungan = items.reduce(
-      (sum, item) => sum + ((Number(item.harga) - Number(item.harga_beli || 0)) * Number(item.stok)),
-      0,
+
+    const potensiKeuntungan = filteredItems.reduce(
+      (sum, item) => sum + ((Number(item.harga_jual) - Number(item.harga_beli || 0)) * Number(item.stok)),
+      0
     );
 
     doc.setFontSize(14);
@@ -358,8 +348,8 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
     doc.text(`Dicetak pada: ${dateStr}`, 14, 28);
 
     doc.setFont('helvetica', 'bold');
-    doc.text(`Total Valuasi Gudang (Modal): Rp ${totalValuasi.toLocaleString('id-ID')}`, 14, 34);
-    doc.text(`Total Potensi Keuntungan: Rp ${totalPotensiKeuntungan.toLocaleString('id-ID')}`, 14, 40);
+    doc.text(`Total Valuasi Gudang (Modal): Rp ${totalAsetJual.toLocaleString('id-ID')}`, 14, 34);
+    doc.text(`Total Potensi Keuntungan: Rp ${potensiKeuntungan.toLocaleString('id-ID')}`, 14, 40);
 
     const sortedItems = [...items].sort((a, b) => {
       const getCat = (stok: number) => (stok === 0 ? 0 : stok <= 5 ? 1 : 2);
@@ -373,7 +363,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
         index + 1,
         item.nama_barang,
         `Rp ${(item.harga_beli || 0).toLocaleString()}`,
-        `Rp ${item.harga.toLocaleString()}`,
+        `Rp ${item.harga_jual.toLocaleString()}`,
         item.stok.toString(),
         status,
       ];
@@ -520,28 +510,28 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
                     type="text"
                     inputMode="numeric"
                     className={`w-full h-12 bg-slate-50 border rounded-xl pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-bold text-slate-700 ${
-                      form.harga > 0 && form.harga < form.harga_beli
+                      form.harga_jual > 0 && form.harga_jual < form.harga_beli
                         ? 'border-amber-400 bg-amber-50/40'
                         : 'border-slate-200'
                     }`}
                     placeholder="0"
-                    value={form.harga === 0 ? '' : form.harga.toLocaleString('id-ID')}
+                    value={form.harga_jual === 0 ? '' : form.harga_jual.toLocaleString('id-ID')}
                     onChange={(e) => {
                       const rawVal = e.target.value.replace(/\D/g, '');
                       const val    = rawVal === '' ? 0 : parseInt(rawVal);
-                      setForm({ ...form, harga: isNaN(val) ? 0 : val });
+                      setForm({ ...form, harga_jual: isNaN(val) ? 0 : val });
                     }}
                     required
                   />
                 </div>
-                {form.harga > 0 && form.harga < form.harga_beli && (
+                {form.harga_jual > 0 && form.harga_jual < form.harga_beli && (
                   <p className="mt-1.5 text-[10px] font-black text-amber-600 flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" /> Harga jual lebih rendah dari harga beli — rugi!
                   </p>
                 )}
-                {form.harga > 0 && form.harga_beli > 0 && form.harga >= form.harga_beli && (
+                {form.harga_jual > 0 && form.harga_beli > 0 && form.harga_jual >= form.harga_beli && (
                   <p className="mt-1.5 text-[10px] font-black text-emerald-600">
-                    Margin: Rp {(form.harga - form.harga_beli).toLocaleString('id-ID')}
+                    Margin: Rp {(form.harga_jual - form.harga_beli).toLocaleString('id-ID')}
                   </p>
                 )}
               </div>
@@ -579,7 +569,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
                     type="button"
                     onClick={() => {
                       setEditingId(null);
-                      setForm({ nama_barang: '', harga_beli: 0, harga: 0, stok: 0 });
+                      setForm({ nama_barang: '', harga_beli: 0, harga_jual: 0, stok: 0 });
                     }}
                     className="h-12 w-12 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-all active:scale-90"
                   >
@@ -668,7 +658,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <h4 className="font-black text-slate-800 text-lg leading-tight mb-1">{item.nama_barang}</h4>
-                          <p className="text-sm font-bold text-blue-600 tracking-tight">Rp {item.harga.toLocaleString()}</p>
+                          <p className="text-sm font-bold text-blue-600 tracking-tight">Rp {item.harga_jual.toLocaleString()}</p>
                           <p className="text-[10px] text-slate-400 font-bold mt-1">Modal: Rp {(item.harga_beli || 0).toLocaleString()}</p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
@@ -676,7 +666,7 @@ export const InventoryModal: React.FC<Props> = ({ onClose }) => {
                             Stok: {item.stok}
                           </div>
                           <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 border border-emerald-100 rounded-full">
-                            Margin: Rp {(item.harga - (item.harga_beli || 0)).toLocaleString()}
+                            Margin: Rp {(item.harga_jual - (item.harga_beli || 0)).toLocaleString()}
                           </span>
                         </div>
                       </div>

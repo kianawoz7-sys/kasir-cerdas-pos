@@ -25,7 +25,7 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
 
   const getShareText = () => {
     const itemsText = trx.items?.map(item =>
-      `${item.nama_barang.padEnd(15)} Rp ${item.harga.toLocaleString().padEnd(8)} x${item.jumlah}`
+      `${item.nama_barang.padEnd(15)} Rp ${item.harga_jual.toLocaleString().padEnd(8)} x${item.jumlah}`
     ).join('\n');
 
     return `
@@ -141,11 +141,11 @@ export const ReceiptModal: React.FC<Props> = ({ trx, onClose }) => {
             <div className="space-y-3 mb-8">
               {trx.items?.map((item, i) => (
                 <div key={i} className="flex justify-between border-b border-slate-50 pb-2">
-                  <div className="flex-1 pr-4">
-                    <p className="font-black text-slate-900 uppercase leading-none mb-1">{item.nama_barang}</p>
-                    <p className="text-slate-400 font-bold">{item.jumlah} x {item.harga.toLocaleString()}</p>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800 leading-tight">{item.nama_barang}</p>
+                    <p className="text-slate-400 font-bold">{item.jumlah} x {item.harga_jual.toLocaleString()}</p>
                   </div>
-                  <span className="font-black self-end text-slate-900">{(item.jumlah * item.harga).toLocaleString()}</span>
+                  <span className="font-black self-end text-slate-900">{(item.jumlah * item.harga_jual).toLocaleString()}</span>
                 </div>
               ))}
             </div>

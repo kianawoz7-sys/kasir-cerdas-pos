@@ -15,9 +15,11 @@ import {
   writeBatch,
   Timestamp,
   where,
+  arrayUnion,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Barang, Transaksi, TransaksiItem } from '../types';
+import { normalizeInventory, normalizeTransaksiItem } from '../utils/normalizeInventory';
 import { format } from 'date-fns';
 
 const BARANG_COL    = 'barang';
@@ -30,7 +32,7 @@ const COUNTERS_COL  = 'counters';
 // ---------------------------------------------------------------------------
 async function fetchTrxWithItems(d: any): Promise<Transaksi> {
   const itemsSnap = await getDocs(collection(db, `${TRANSAKSI_COL}/${d.id}/items`));
-  const items = itemsSnap.docs.map(idoc => ({ id: idoc.id, ...idoc.data() } as TransaksiItem));
+  const items = itemsSnap.docs.map(idoc => ({ id: idoc.id, ...normalizeTransaksiItem(idoc.data()) } as TransaksiItem));
   return { id: d.id, ...d.data(), items } as Transaksi;
 }
 
@@ -44,7 +46,7 @@ export const posService = {
     try {
       const q = query(collection(db, BARANG_COL), orderBy('nama_barang', 'asc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Barang));
+      return snapshot.docs.map(d => ({ id: d.id, ...normalizeInventory(d.data()) } as Barang));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, BARANG_COL);
       return [];
@@ -55,6 +57,7 @@ export const posService = {
     try {
       await addDoc(collection(db, BARANG_COL), {
         ...barang,
+        schema_version: 2,
         created_at: serverTimestamp(),
       });
     } catch (e) {
@@ -75,6 +78,51 @@ export const posService = {
       await deleteDoc(doc(db, BARANG_COL, id));
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `${BARANG_COL}/${id}`);
+    }
+  },
+
+  // ==========================================================================
+  // SMART STOCK-IN BATCH
+  // ==========================================================================
+
+  async processSmartStockIn(items: any[]) {
+    try {
+      const batch = writeBatch(db);
+
+      items.forEach(item => {
+        if (item.isNewItem) {
+          const newRef = doc(collection(db, BARANG_COL));
+          batch.set(newRef, {
+            nama_barang: item.newProductName,
+            harga_beli: item.buyPrice,
+            harga_jual: item.newSellPrice,
+            stok: item.qty,
+            kategori: "Belum Dikategorikan",
+            satuan: "pcs",
+            terjual: 0,
+            schema_version: 2,
+            aliases: item.rawName && item.rawName.trim() !== '' ? [item.rawName.trim()] : [],
+            created_at: serverTimestamp(),
+          });
+        } else if (item.matchedId) {
+          const barangRef = doc(db, BARANG_COL, item.matchedId);
+          
+          const updateData: any = {
+            stok: increment(item.qty)
+          };
+
+          if (item.rawName && item.rawName.trim() !== '') {
+            updateData.aliases = arrayUnion(item.rawName.trim());
+          }
+
+          batch.update(barangRef, updateData);
+        }
+      });
+
+      await batch.commit();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, BARANG_COL);
+      throw e;
     }
   },
 
