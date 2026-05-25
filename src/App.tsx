@@ -379,15 +379,52 @@ export default function App() {
 
     toast.remove();
     setExpandedTrx(null);
-    toast.loading('Menghapus...', { id: 'global-pos-toast' });
-    try {
-      await posService.deleteTransaksi(trx);
-      toast.success('Transaksi dihapus', { id: 'global-pos-toast', duration: 1500 });
-      // Small delay so the success toast is visible before the list reloads
-      setTimeout(() => loadData(), 100);
-    } catch (e) {
-      toast.error('Gagal menghapus', { id: 'global-pos-toast', duration: 1500 });
+
+    // -------------------------------------------------------------------------
+    // OPTIMISTIC UI — remove from local state INSTANTLY, no await.
+    // -------------------------------------------------------------------------
+
+    // 1. Snapshot the transaction for potential rollback
+    const deletedTrx = trx;
+
+    // 2. Remove from history sidebar immediately
+    setHistory(prev => prev.filter(t => t.id !== trx.id));
+
+    // 3. Restore stock locally (undo what checkout deducted)
+    if (trx.items && trx.items.length > 0) {
+      setBarang(prev =>
+        prev.map(b => {
+          const restoredItem = trx.items!.find(ci => ci.barang_id === b.id);
+          if (!restoredItem) return b;
+          return { ...b, stok: b.stok + restoredItem.jumlah };
+        }),
+      );
     }
+
+    toast.success('Transaksi dihapus', { id: 'global-pos-toast', duration: 2000 });
+
+    // -------------------------------------------------------------------------
+    // BACKGROUND DELETE — fire-and-forget. Rollback if Firestore fails.
+    // -------------------------------------------------------------------------
+    posService
+      .deleteTransaksi(deletedTrx)
+      .catch((e: any) => {
+        // ---- ROLLBACK ----
+        setHistory(prev => [deletedTrx, ...prev]);
+        if (deletedTrx.items && deletedTrx.items.length > 0) {
+          setBarang(prev =>
+            prev.map(b => {
+              const item = deletedTrx.items!.find(ci => ci.barang_id === b.id);
+              if (!item) return b;
+              return { ...b, stok: Math.max(0, b.stok - item.jumlah) };
+            }),
+          );
+        }
+        toast.error(e?.message || 'Gagal menghapus transaksi, silakan coba lagi.', {
+          id: 'global-pos-toast',
+          duration: 4000,
+        });
+      });
   };
 
   // ---------------------------------------------------------------------------
@@ -903,11 +940,32 @@ export default function App() {
               // sidebar stays accurate and we don't keep the full archive in RAM.
               loadData();
             }}
-            onDelete={async () => {
-              // Sequential — both share the isFetching lock, so parallel calls
-              // would cause the second to bail out immediately.
-              await loadFullHistory();
-              await loadData();
+            onDelete={(deletedId: string, deletedTrx: Transaksi) => {
+              // Optimistically splice out from parent state — no re-fetch needed.
+              setHistory(prev => prev.filter(t => t.id !== deletedId));
+              // Restore stock for the deleted transaction's items
+              if (deletedTrx.items && deletedTrx.items.length > 0) {
+                setBarang(prev =>
+                  prev.map(b => {
+                    const item = deletedTrx.items!.find(ci => ci.barang_id === b.id);
+                    if (!item) return b;
+                    return { ...b, stok: b.stok + item.jumlah };
+                  }),
+                );
+              }
+            }}
+            onRollbackDelete={(trx: Transaksi) => {
+              // Background Firestore delete failed — restore the transaction.
+              setHistory(prev => [trx, ...prev]);
+              if (trx.items && trx.items.length > 0) {
+                setBarang(prev =>
+                  prev.map(b => {
+                    const item = trx.items!.find(ci => ci.barang_id === b.id);
+                    if (!item) return b;
+                    return { ...b, stok: Math.max(0, b.stok - item.jumlah) };
+                  }),
+                );
+              }
             }}
             onShowReceipt={(trx) => {
               setShowHistoryModal(false);

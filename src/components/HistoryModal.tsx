@@ -30,7 +30,10 @@ interface HistoryModalProps {
   /** True while App.tsx is fetching the full archive — shows skeleton loader */
   isLoadingHistory: boolean;
   onClose: () => void;
-  onDelete: () => void;
+  /** Called immediately (optimistic) with the deleted ID + full trx object */
+  onDelete: (deletedId: string, deletedTrx: Transaksi) => void;
+  /** Called if the background Firestore delete fails — used to roll back */
+  onRollbackDelete: (trx: Transaksi) => void;
   onShowReceipt: (trx: Transaksi) => void;
 }
 
@@ -39,6 +42,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   isLoadingHistory,
   onClose,
   onDelete,
+  onRollbackDelete,
   onShowReceipt,
 }) => {
   const [activeTab, setActiveTab]             = useState<'list' | 'rekap'>('list');
@@ -102,18 +106,32 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   // ---------------------------------------------------------------------------
   const handleDelete = (trx: Transaksi) => setDeleteConfirmTrx(trx);
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!deleteConfirmTrx) return;
-    toast.remove();
-    toast.loading('Menghapus transaksi...', { id: 'global-pos-toast' });
-    try {
-      await posService.deleteTransaksi(deleteConfirmTrx);
-      toast.success('Transaksi berhasil dihapus!', { id: 'global-pos-toast', duration: 1500 });
-      setDeleteConfirmTrx(null);
-      onDelete();
-    } catch {
-      toast.error('Gagal menghapus transaksi', { id: 'global-pos-toast', duration: 1500 });
-    }
+
+    // Snapshot the trx before clearing dialog state
+    const trxToDelete = deleteConfirmTrx;
+
+    // -------------------------------------------------------------------------
+    // OPTIMISTIC UI — dismiss dialog & update parent state INSTANTLY.
+    // -------------------------------------------------------------------------
+    setDeleteConfirmTrx(null);
+    setExpandedId(null);
+    onDelete(trxToDelete.id, trxToDelete);
+    toast.success('Transaksi dihapus', { id: 'global-pos-toast', duration: 2000 });
+
+    // -------------------------------------------------------------------------
+    // BACKGROUND DELETE — fire-and-forget. Rollback on failure.
+    // -------------------------------------------------------------------------
+    posService
+      .deleteTransaksi(trxToDelete)
+      .catch((e: any) => {
+        onRollbackDelete(trxToDelete);
+        toast.error(e?.message || 'Gagal menghapus transaksi, silakan coba lagi.', {
+          id: 'global-pos-toast',
+          duration: 4000,
+        });
+      });
   };
 
   const downloadReport = async () => {
