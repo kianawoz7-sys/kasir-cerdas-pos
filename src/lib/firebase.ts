@@ -4,20 +4,37 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  memoryLocalCache,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with robust Multi-Tab Offline Persistence.
-// IndexedDB is used as the local cache so data is served instantly on
-// subsequent loads, even when the network is slow or unavailable.
-// persistentMultipleTabManager() ensures safe cache-sharing across tabs.
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+// ---------------------------------------------------------------------------
+// Initialize Firestore with Multi-Tab IndexedDB persistence.
+// Falls back to in-memory cache if IndexedDB is unavailable (private mode,
+// storage-quota exceeded, second-tab lock contention, etc.) so the app always
+// boots instead of hanging forever on persistence initialization.
+// ---------------------------------------------------------------------------
+function createFirestore() {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch (e) {
+    console.warn(
+      '[Firebase] IndexedDB persistence unavailable, falling back to memory cache:',
+      e,
+    );
+    return initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+    });
+  }
+}
+
+export const db = createFirestore();
 
 export const auth = getAuth();
 

@@ -106,21 +106,44 @@ export default function App() {
   useEffect(() => {
     let unsub: () => void;
 
+    // -----------------------------------------------------------------------
+    // FAILSAFE: if Firebase auth hangs for any reason (IndexedDB lock,
+    // network timeout, private-browsing storage block, etc.) we must still
+    // exit the loading screen. 4 s is generous — normal init is <300 ms.
+    // -----------------------------------------------------------------------
+    const bootTimeout = setTimeout(() => {
+      console.warn('[App] Auth init timed out — forcing loading=false.');
+      setLoading(false);
+    }, 4000);
+
     setPersistence(auth, browserLocalPersistence)
       .then(() => {
         unsub = onAuthStateChanged(auth, (u) => {
+          clearTimeout(bootTimeout);
           setUser(u);
           setLoading(false);
         });
       })
       .catch((err) => {
         console.error('Gagal nyimpen sesi login:', err);
-        setLoading(false);
+        // Even if persistence fails, still listen for auth state so the
+        // user can log in; session just won't survive a hard refresh.
+        try {
+          unsub = onAuthStateChanged(auth, (u) => {
+            clearTimeout(bootTimeout);
+            setUser(u);
+            setLoading(false);
+          });
+        } catch {
+          clearTimeout(bootTimeout);
+          setLoading(false);
+        }
       });
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
     return () => {
+      clearTimeout(bootTimeout);
       if (unsub) unsub();
       clearInterval(timer);
     };
@@ -136,20 +159,39 @@ export default function App() {
   //
   // Complexity: O(transactions_today) regardless of archive size.
   // The N+1 serial-await pattern is gone — subcollection reads are concurrent.
+  // Guarded by a 6-second Promise.race timeout so a stalled Firestore SDK
+  // (e.g. IndexedDB lock contention) never leaves the UI blank forever.
   // ---------------------------------------------------------------------------
   const loadData = async () => {
     if (isFetching.current) return;
     isFetching.current = true;
     try {
-      const [b, h] = await Promise.all([
+      const TIMEOUT_MS = 6000;
+      const timeoutError = new Error('loadData timed out after 6 s');
+
+      const fetchPromise = Promise.all([
         posService.getBarang(),
         posService.getTransaksiToday(),
       ]);
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(timeoutError), TIMEOUT_MS),
+      );
+
+      const [b, h] = await Promise.race([fetchPromise, timeoutPromise]);
       setBarang(b);
       setHistory(h);
-    } catch (e) {
+    } catch (e: any) {
+      const isTimeout = e?.message?.includes('timed out');
       console.error('loadData failed:', e);
-      toast.error('Gagal memuat data. Periksa koneksi Anda.', { id: 'load-data-error' });
+      toast.error(
+        isTimeout
+          ? 'Koneksi lambat — data mungkin belum lengkap. Coba refresh.'
+          : 'Gagal memuat data. Periksa koneksi Anda.',
+        { id: 'load-data-error', duration: 5000 },
+      );
+      // Intentionally do NOT rethrow — render whatever state we have
+      // (empty arrays from useState initial value) rather than staying blank.
     } finally {
       isFetching.current = false;
     }
