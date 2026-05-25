@@ -281,33 +281,93 @@ export default function App() {
       return;
     }
 
-    toast.loading('Memproses transaksi...', { id: 'global-pos-toast' });
-    try {
-      const result = await posService.checkout(
+    // -------------------------------------------------------------------------
+    // OPTIMISTIC UI — Step 1: build the receipt object from local state NOW.
+    // We use a temporary ID so the receipt can be shown before Firestore replies.
+    // The real ID is patched in once the background write completes.
+    // -------------------------------------------------------------------------
+    const tempId       = `temp-${Date.now()}`;
+    const now          = new Date();
+    const tempTrxNum   = `TRX-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-PENDING`;
+
+    const optimisticTrx: Transaksi = {
+      id:           tempId,
+      no_transaksi: tempTrxNum,
+      total_harga:  totalBelanja,
+      total_qty:    totalQty,
+      status:       'completed',
+      tanggal:      now,
+      items:        [...cart],
+    };
+
+    // Step 2: Snapshot the cart before clearing it (needed for rollback + background save)
+    const cartSnapshot = [...cart];
+
+    // Step 3: Update UI IMMEDIATELY — no await, no network latency.
+    //   a) Open receipt modal right away
+    setShowReceipt(optimisticTrx);
+    //   b) Clear the cart
+    setCart([]);
+    //   c) Prepend to today's history sidebar (no re-fetch needed)
+    setHistory(prev => [optimisticTrx, ...prev]);
+    //   d) Decrement stock counts locally so the product list stays accurate
+    setBarang(prev =>
+      prev.map(b => {
+        const soldItem = cartSnapshot.find(ci => ci.barang_id === b.id);
+        if (!soldItem) return b;
+        return { ...b, stok: Math.max(0, b.stok - soldItem.jumlah) };
+      }),
+    );
+
+    toast.success('Transaksi Berhasil!', { id: 'global-pos-toast', duration: 1500 });
+
+    // -------------------------------------------------------------------------
+    // BACKGROUND WRITE — fire-and-forget. The user already sees the receipt.
+    // On success  → patch the optimistic entry with the real Firestore ID & no.
+    // On failure  → roll back all local state and show an error.
+    // -------------------------------------------------------------------------
+    posService
+      .checkout(
         { total_harga: totalBelanja, total_qty: totalQty, status: 'completed' },
-        cart,
-      );
-
-      toast.success('Transaksi Berhasil!', { id: 'global-pos-toast' });
-
-      // Reload today's data to refresh sidebar + stock counts.
-      await loadData();
-
-      const fullTrx: Transaksi = {
-        id: result.id,
-        no_transaksi: result.no_transaksi,
-        total_harga: totalBelanja,
-        total_qty: totalQty,
-        status: 'completed',
-        tanggal: result.tanggal,
-        items: cart,
-      };
-
-      setShowReceipt(fullTrx);
-      setCart([]);
-    } catch (e: any) {
-      toast.error(e.message || 'Gagal memproses transaksi', { id: 'global-pos-toast' });
-    }
+        cartSnapshot,
+      )
+      .then(result => {
+        // Patch optimistic entry in history with the real Firestore data
+        setHistory(prev =>
+          prev.map(t =>
+            t.id === tempId
+              ? { ...t, id: result.id, no_transaksi: result.no_transaksi, tanggal: result.tanggal }
+              : t,
+          ),
+        );
+        // Patch the receipt modal if still open
+        setShowReceipt(prev =>
+          prev?.id === tempId
+            ? { ...prev, id: result.id, no_transaksi: result.no_transaksi, tanggal: result.tanggal }
+            : prev,
+        );
+      })
+      .catch((e: any) => {
+        // ---- ROLLBACK ----
+        // Remove optimistic history entry
+        setHistory(prev => prev.filter(t => t.id !== tempId));
+        // Restore cart
+        setCart(cartSnapshot);
+        // Restore stock counts
+        setBarang(prev =>
+          prev.map(b => {
+            const soldItem = cartSnapshot.find(ci => ci.barang_id === b.id);
+            if (!soldItem) return b;
+            return { ...b, stok: b.stok + soldItem.jumlah };
+          }),
+        );
+        // Close receipt if it's still the optimistic one
+        setShowReceipt(prev => (prev?.id === tempId ? null : prev));
+        toast.error(e.message || 'Transaksi gagal disimpan, silakan coba lagi.', {
+          id: 'global-pos-toast',
+          duration: 4000,
+        });
+      });
   };
 
   // ---------------------------------------------------------------------------
