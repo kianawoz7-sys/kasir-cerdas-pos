@@ -23,7 +23,8 @@ import { format } from 'date-fns';
 import { auth, db } from './lib/firebase';
 import {
   onAuthStateChanged,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   setPersistence,
@@ -118,7 +119,22 @@ export default function App() {
     }, 4000);
 
     setPersistence(auth, browserLocalPersistence)
-      .then(() => {
+      .then(async () => {
+        // -------------------------------------------------------------------
+        // Handle the result of a signInWithRedirect after user returns to app.
+        // Must be called before onAuthStateChanged to ensure the redirect
+        // credential is consumed and the user state is updated correctly.
+        // -------------------------------------------------------------------
+        try {
+          const result = await getRedirectResult(auth);
+          if (result?.user) {
+            toast.success('Berhasil login', { id: 'global-pos-toast' });
+          }
+        } catch (redirectErr) {
+          console.error('[App] getRedirectResult error:', redirectErr);
+          toast.error('Gagal login, silakan coba lagi.', { id: 'global-pos-toast' });
+        }
+
         unsub = onAuthStateChanged(auth, (u) => {
           clearTimeout(bootTimeout);
           setUser(u);
@@ -225,10 +241,12 @@ export default function App() {
     toast.remove();
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      toast.success('Berhasil login', { id: 'global-pos-toast' });
+      // signInWithRedirect navigates the user away from the page; the result
+      // is handled by getRedirectResult() inside the auth useEffect on return.
+      await signInWithRedirect(auth, provider);
     } catch (e) {
-      toast.error('Gagal login', { id: 'global-pos-toast' });
+      console.error('[App] signInWithRedirect error:', e);
+      toast.error('Gagal memulai login, silakan coba lagi.', { id: 'global-pos-toast' });
     }
   };
 
