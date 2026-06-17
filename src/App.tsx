@@ -67,6 +67,7 @@ export default function App() {
   const [expandedTrx, setExpandedTrx] = useState<string | null>(null);
   const [selectedBarangId, setSelectedBarangId] = useState('');
   const [qtyInput, setQtyInput] = useState<number | ''>(1);
+  const [avatarError, setAvatarError] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Fetch lock: prevents overlapping loadData / loadFullHistory calls.
@@ -561,9 +562,37 @@ export default function App() {
             <button
               onClick={logout}
               className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-white shadow-md hover:border-blue-200 transition-all active:scale-95"
-              title={user.displayName}
+              title={`${user.displayName} — Klik untuk logout`}
             >
-              <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+              {user.photoURL && !avatarError ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName}
+                  className="w-full h-full object-cover"
+                  onError={() => setAvatarError(true)}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                  <rect width="40" height="40" fill="#2563eb" />
+                  <text
+                    x="50%"
+                    y="50%"
+                    dominantBaseline="central"
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize="16"
+                    fontWeight="bold"
+                    fontFamily="system-ui, sans-serif"
+                  >
+                    {(user.displayName ?? user.email ?? '?')
+                      .split(' ')
+                      .slice(0, 2)
+                      .map((n: string) => n[0]?.toUpperCase())
+                      .join('')}
+                  </text>
+                </svg>
+              )}
             </button>
           </div>
         </div>
