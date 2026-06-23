@@ -112,47 +112,48 @@ export default function App() {
     // -----------------------------------------------------------------------
     // FAILSAFE: if Firebase auth hangs for any reason (IndexedDB lock,
     // network timeout, private-browsing storage block, etc.) we must still
-    // exit the loading screen. 4 s is generous — normal init is <300 ms.
+    // exit the loading screen. 8 s covers slow redirect result processing.
     // -----------------------------------------------------------------------
     const bootTimeout = setTimeout(() => {
       console.warn('[App] Auth init timed out — forcing loading=false.');
       setLoading(false);
-    }, 4000);
+    }, 8000);
 
-    setPersistence(auth, browserLocalPersistence)
-      .then(() => {
-        unsub = onAuthStateChanged(auth, (u) => {
-          clearTimeout(bootTimeout);
-          setUser(u);
-          setLoading(false);
-        });
-
-        getRedirectResult(auth)
-          .then((result) => {
-            if (result?.user) {
-              toast.success('Berhasil login', { id: 'global-pos-toast' });
-            }
-          })
-          .catch((redirectErr) => {
-            console.error('[App] getRedirectResult error:', redirectErr);
-            toast.error('Gagal login, silakan coba lagi.', { id: 'global-pos-toast' });
-          });
-      })
-      .catch((err) => {
+    async function initAuth() {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (err) {
         console.error('Gagal nyimpen sesi login:', err);
-        // Even if persistence fails, still listen for auth state so the
-        // user can log in; session just won't survive a hard refresh.
-        try {
-          unsub = onAuthStateChanged(auth, (u) => {
-            clearTimeout(bootTimeout);
-            setUser(u);
-            setLoading(false);
-          });
-        } catch {
-          clearTimeout(bootTimeout);
-          setLoading(false);
+        // persistence gagal — tetap lanjut, sesi tidak akan bertahan hard-refresh
+      }
+
+      // -----------------------------------------------------------------------
+      // PENTING: getRedirectResult() HARUS dipanggil SEBELUM onAuthStateChanged
+      // didaftarkan. Jika dipanggil bersamaan (race), di HP redirect flow bisa
+      // selesai tapi user state tidak ke-set dengan benar → stuck di login.
+      // -----------------------------------------------------------------------
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          toast.success('Berhasil login', { id: 'global-pos-toast' });
         }
+      } catch (redirectErr: any) {
+        // auth/no-auth-event = tidak ada redirect yg pending, aman diabaikan
+        if (redirectErr?.code !== 'auth/no-auth-event') {
+          console.error('[App] getRedirectResult error:', redirectErr);
+          toast.error('Gagal login, silakan coba lagi.', { id: 'global-pos-toast' });
+        }
+      }
+
+      // Setelah redirect result diproses, baru daftarkan auth state listener
+      unsub = onAuthStateChanged(auth, (u) => {
+        clearTimeout(bootTimeout);
+        setUser(u);
+        setLoading(false);
       });
+    }
+
+    initAuth();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
