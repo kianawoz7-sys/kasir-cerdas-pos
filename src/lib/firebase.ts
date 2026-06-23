@@ -8,20 +8,12 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const proxiedAuthDomains = new Set(['kasir-cerdas-gamma.vercel.app']);
+// Selalu gunakan authDomain resmi Firebase (kasircerdas-f464b.firebaseapp.com).
+// Pendekatan proxy Vercel (/__/auth/*) tidak bisa diandalkan karena Vercel
+// catch-all /(.*) bisa mengintersep request sebelum proxy sempat jalan,
+// sehingga Firebase auth handler tidak pernah diproses → redirect loop.
+const app = initializeApp(firebaseConfig);
 
-function getFirebaseConfig() {
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
-
-  return {
-    ...firebaseConfig,
-    authDomain: proxiedAuthDomains.has(currentHost)
-      ? currentHost
-      : firebaseConfig.authDomain,
-  };
-}
-
-const app = initializeApp(getFirebaseConfig());
 
 // ---------------------------------------------------------------------------
 // Initialize Firestore with Multi-Tab IndexedDB persistence.
