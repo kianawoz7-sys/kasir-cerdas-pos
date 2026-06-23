@@ -8,7 +8,20 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const proxiedAuthDomains = new Set(['kasir-cerdas-gamma.vercel.app']);
+
+function getFirebaseConfig() {
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+
+  return {
+    ...firebaseConfig,
+    authDomain: proxiedAuthDomains.has(currentHost)
+      ? currentHost
+      : firebaseConfig.authDomain,
+  };
+}
+
+const app = initializeApp(getFirebaseConfig());
 
 // ---------------------------------------------------------------------------
 // Initialize Firestore with Multi-Tab IndexedDB persistence.
@@ -36,7 +49,7 @@ function createFirestore() {
 
 export const db = createFirestore();
 
-export const auth = getAuth();
+export const auth = getAuth(app);
 
 export enum OperationType {
   CREATE = 'create',
