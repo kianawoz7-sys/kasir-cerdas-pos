@@ -17,6 +17,11 @@ import {
   FileText,
   TrendingUp,
   Scan,
+  FlaskConical,
+  ShieldCheck,
+  Zap,
+  BarChart3,
+  ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -38,6 +43,7 @@ import { customConfirm } from './utils/confirmDialog';
 import { InventoryModal } from './components/InventoryModal';
 import { HistoryModal } from './components/HistoryModal';
 import { SmartStockInModal } from './components/SmartStockInModal';
+import { SandboxModal } from './components/SandboxModal';
 
 export default function App() {
   const { toasts } = useToasterStore();
@@ -65,6 +71,7 @@ export default function App() {
   const [showInventory, setShowInventory] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isSmartStockInOpen, setIsSmartStockInOpen] = useState(false);
+  const [showSandbox, setShowSandbox] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTrx, setExpandedTrx] = useState<string | null>(null);
   const [selectedBarangId, setSelectedBarangId] = useState('');
@@ -511,33 +518,198 @@ export default function App() {
   // Render — loading / unauthenticated guards
   // ---------------------------------------------------------------------------
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="animate-pulse flex flex-col items-center">
-        <Package className="w-12 h-12 text-blue-500 mb-4" />
-        <p className="text-gray-500">Memuat sistem...</p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
+      {/* Animated grid background */}
+      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(99,102,241,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col items-center gap-5 relative z-10"
+      >
+        {/* Glowing logo */}
+        <div className="relative">
+          <div className="absolute inset-0 rounded-2xl blur-xl opacity-60" style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }} />
+          <div className="relative w-20 h-20 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-2xl" style={{ background: 'linear-gradient(135deg, #2563eb, #4f46e5)' }}>K</div>
+        </div>
+        {/* Spinner ring */}
+        <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-blue-400 animate-spin" />
+        <div className="text-center">
+          <p className="text-white font-black text-lg tracking-widest uppercase">Kasir Cerdas</p>
+          <p className="text-blue-300/70 text-xs font-medium tracking-widest mt-1">Memuat sistem...</p>
+        </div>
+      </motion.div>
     </div>
   );
 
   if (!user) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center"
-      >
-        <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-          <LayoutDashboard className="w-10 h-10 text-blue-600" />
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Kasir Cerdas POS</h1>
-        <p className="text-gray-500 mb-8">Sistem kasir modern, cepat, dan terpercaya untuk bisnis Anda.</p>
-        <button
-          onClick={login}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+    <div
+      className="min-h-screen flex items-center justify-center relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }}
+    >
+      {/* Animated grid */}
+      <div
+        className="absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(99,102,241,1) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,1) 1px, transparent 1px)',
+          backgroundSize: '60px 60px',
+        }}
+      />
+
+      {/* Glowing blobs */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full opacity-20 blur-3xl pointer-events-none" style={{ background: 'radial-gradient(circle, #3b82f6, transparent 70%)' }} />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full opacity-15 blur-3xl pointer-events-none" style={{ background: 'radial-gradient(circle, #6366f1, transparent 70%)' }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[300px] opacity-10 blur-3xl pointer-events-none" style={{ background: 'radial-gradient(ellipse, #4f46e5, transparent 70%)' }} />
+
+      {/* ── DESKTOP: two-column layout ── */}
+      <div className="relative z-10 w-full max-w-6xl mx-auto px-6 flex items-center justify-between gap-16">
+
+        {/* LEFT — Hero branding + floating stats */}
+        <motion.div
+          initial={{ opacity: 0, x: -40 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+          className="hidden lg:flex flex-col flex-1 gap-10"
         >
-          Masuk dengan Google
-        </button>
-      </motion.div>
+          {/* Brand */}
+          <div>
+            <div className="flex items-center gap-4 mb-8">
+              <div className="relative">
+                <div className="absolute inset-0 rounded-2xl blur-lg opacity-80" style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-2xl" style={{ background: 'linear-gradient(135deg, #2563eb, #4f46e5)' }}>K</div>
+              </div>
+              <div>
+                <p className="text-white font-black text-xl tracking-widest uppercase">Kasir Cerdas</p>
+                <p className="text-blue-300/60 text-xs font-bold tracking-widest uppercase">POS System v2.0</p>
+              </div>
+            </div>
+            <h2 className="text-5xl font-black text-white leading-tight mb-4">
+              Kelola toko<br />
+              <span style={{ background: 'linear-gradient(90deg, #60a5fa, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                lebih cerdas.
+              </span>
+            </h2>
+            <p className="text-slate-400 text-lg font-medium leading-relaxed max-w-md">
+              Sistem kasir modern yang cepat, akurat, dan terpercaya untuk bisnis Anda berkembang.
+            </p>
+          </div>
+
+          {/* Floating stat cards */}
+          <div className="flex flex-col gap-4">
+            {[
+              { icon: BarChart3, label: 'Rekap Otomatis', desc: 'Laporan harian & bulanan real-time', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+              { icon: ShieldCheck, label: 'Data Aman', desc: 'Tersimpan di Firebase Cloud', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+              { icon: Zap, label: 'Transaksi Instan', desc: 'Checkout optimistik tanpa delay', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+            ].map((f, i) => (
+              <motion.div
+                key={f.label}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + i * 0.12, duration: 0.5 }}
+                className="flex items-center gap-4 rounded-2xl p-4 border border-white/5 backdrop-blur-sm"
+                style={{ background: 'rgba(255,255,255,0.03)' }}
+              >
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: f.bg }}>
+                  <f.icon className="w-5 h-5" style={{ color: f.color }} />
+                </div>
+                <div>
+                  <p className="text-white font-bold text-sm">{f.label}</p>
+                  <p className="text-slate-400 text-xs">{f.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* RIGHT — Login card */}
+        <motion.div
+          initial={{ opacity: 0, y: 30, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
+          className="w-full lg:w-[420px] shrink-0"
+        >
+          <div
+            className="rounded-3xl p-8 border border-white/10 shadow-2xl backdrop-blur-xl"
+            style={{ background: 'rgba(255,255,255,0.05)' }}
+          >
+            {/* Mobile brand (shown only on mobile) */}
+            <div className="flex lg:hidden items-center justify-center gap-3 mb-8">
+              <div className="relative">
+                <div className="absolute inset-0 rounded-xl blur-md opacity-80" style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }} />
+                <div className="relative w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-lg" style={{ background: 'linear-gradient(135deg, #2563eb, #4f46e5)' }}>K</div>
+              </div>
+              <div>
+                <p className="text-white font-black tracking-widest text-sm uppercase">Kasir Cerdas</p>
+                <p className="text-blue-300/50 text-[10px] font-bold tracking-widest uppercase">POS System v2.0</p>
+              </div>
+            </div>
+
+            {/* Heading */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-black text-white mb-2 leading-tight">
+                Selamat Datang<br />
+                <span style={{ background: 'linear-gradient(90deg, #60a5fa, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  Kembali 👋
+                </span>
+              </h1>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Masuk untuk mengelola transaksi, inventaris, dan laporan toko Anda.
+              </p>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Login dengan</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+
+            {/* Google Button */}
+            <motion.button
+              onClick={login}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              className="w-full flex items-center justify-between gap-3 bg-white hover:bg-slate-50 text-slate-800 font-bold py-4 px-5 rounded-2xl transition-all shadow-xl shadow-black/20 group"
+            >
+              <div className="flex items-center gap-3">
+                {/* Google SVG icon */}
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                <span className="text-sm">Masuk dengan Google</span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-0.5 transition-all" />
+            </motion.button>
+
+            {/* Footer note */}
+            <p className="text-center text-slate-600 text-xs mt-6 leading-relaxed">
+              Dengan masuk, Anda menyetujui penggunaan data untuk keperluan aplikasi kasir ini.
+            </p>
+
+            {/* Feature badges */}
+            <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-white/5">
+              {[
+                { icon: ShieldCheck, label: 'Aman', color: '#10b981' },
+                { icon: Zap, label: 'Cepat', color: '#f59e0b' },
+                { icon: BarChart3, label: 'Akurat', color: '#3b82f6' },
+              ].map(b => (
+                <div key={b.label} className="flex items-center gap-1.5">
+                  <b.icon className="w-3.5 h-3.5" style={{ color: b.color }} />
+                  <span className="text-slate-500 text-[11px] font-bold">{b.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom credit */}
+          <p className="text-center text-slate-600 text-[11px] mt-5 font-medium">
+            Kasir Cerdas POS © 2025 — v2.0
+          </p>
+        </motion.div>
+      </div>
     </div>
   );
 
@@ -566,6 +738,15 @@ export default function App() {
             <p className="text-xs text-slate-500 font-mono tracking-tighter">{format(currentTime, 'HH:mm:ss')}</p>
           </div>
           <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Sandbox */}
+            <button
+              onClick={() => setShowSandbox(true)}
+              className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold shadow-md transition-all active:scale-95"
+              title="Sandbox — Ambil Barang Pribadi"
+            >
+              <FlaskConical className="w-5 h-5 md:w-5 md:h-5" />
+              <span className="hidden md:inline text-sm whitespace-nowrap">Sandbox</span>
+            </button>
             {/* Smart Stock-In (Scan) */}
             <button
               onClick={() => setIsSmartStockInOpen(true)}
@@ -1084,6 +1265,21 @@ export default function App() {
 
         {isSmartStockInOpen && (
           <SmartStockInModal onClose={() => setIsSmartStockInOpen(false)} inventory={barang} />
+        )}
+
+        {showSandbox && (
+          <SandboxModal
+            inventory={barang}
+            onClose={() => setShowSandbox(false)}
+            onStockUpdate={(updates) => {
+              setBarang(prev =>
+                prev.map(b => {
+                  const u = updates.find(x => x.barang_id === b.id);
+                  return u ? { ...b, stok: Math.max(0, b.stok + u.delta) } : b;
+                }),
+              );
+            }}
+          />
         )}
       </AnimatePresence>
     </div>

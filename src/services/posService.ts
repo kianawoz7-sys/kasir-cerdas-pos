@@ -18,13 +18,14 @@ import {
   arrayUnion,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Barang, Transaksi, TransaksiItem } from '../types';
+import { Barang, Transaksi, TransaksiItem, SandboxItem, SandboxLog } from '../types';
 import { normalizeInventory, normalizeTransaksiItem } from '../utils/normalizeInventory';
 import { format } from 'date-fns';
 
 const BARANG_COL    = 'barang';
 const TRANSAKSI_COL = 'transaksi';
 const COUNTERS_COL  = 'counters';
+const SANDBOX_COL   = 'sandbox_log';
 
 // ---------------------------------------------------------------------------
 // Helper: fetch a single transaksi doc + its items subcollection in parallel.
@@ -292,6 +293,88 @@ export const posService = {
       await batch.commit();
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, TRANSAKSI_COL);
+      throw e;
+    }
+  },
+
+  // ==========================================================================
+  // SANDBOX — Pengambilan barang pribadi (potong stok, TANPA transaksi kasir)
+  // ==========================================================================
+
+  async processSandboxTakeout(items: SandboxItem[], catatan?: string) {
+    try {
+      return await runTransaction(db, async (transaction) => {
+        // --- FASE 1: READS ---
+        for (const item of items) {
+          const barangRef = doc(db, BARANG_COL, item.barang_id);
+          const barangDoc = await transaction.get(barangRef);
+
+          if (!barangDoc.exists()) {
+            throw new Error(`Barang ${item.nama_barang} tidak ditemukan`);
+          }
+
+          const currentStok = barangDoc.data().stok;
+          if (currentStok < item.jumlah) {
+            throw new Error(`Stok ${item.nama_barang} tidak mencukupi. Sisa: ${currentStok}`);
+          }
+        }
+
+        // --- FASE 2: WRITES ---
+        const timestamp = new Date();
+
+        // 1. Potong stok setiap barang
+        for (const item of items) {
+          const barangRef = doc(db, BARANG_COL, item.barang_id);
+          transaction.update(barangRef, { stok: increment(-item.jumlah) });
+        }
+
+        // 2. Simpan log sandbox (BUKAN ke transaksi — tidak masuk history/rekap kasir)
+        const sandboxRef = doc(collection(db, SANDBOX_COL));
+        transaction.set(sandboxRef, {
+          tanggal: timestamp,
+          catatan: catatan?.trim() || '',
+          total_item: items.reduce((s, i) => s + i.jumlah, 0),
+          items,
+        });
+
+        return { id: sandboxRef.id, tanggal: timestamp };
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, SANDBOX_COL);
+      throw e;
+    }
+  },
+
+  async getSandboxLogs(): Promise<SandboxLog[]> {
+    try {
+      const q = query(collection(db, SANDBOX_COL), orderBy('tanggal', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+      } as SandboxLog));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, SANDBOX_COL);
+      return [];
+    }
+  },
+
+  async deleteSandboxLog(log: SandboxLog) {
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Kembalikan stok setiap barang
+      for (const item of log.items) {
+        const barangRef = doc(db, BARANG_COL, item.barang_id);
+        batch.update(barangRef, { stok: increment(item.jumlah) });
+      }
+
+      // 2. Hapus dokumen sandbox log
+      batch.delete(doc(db, SANDBOX_COL, log.id));
+
+      await batch.commit();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, SANDBOX_COL);
       throw e;
     }
   },

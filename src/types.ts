@@ -30,3 +30,18 @@ export interface Transaksi {
 }
 
 export interface CartItem extends TransaksiItem {}
+
+export interface SandboxItem {
+  barang_id: string;
+  nama_barang: string;
+  jumlah: number;
+  harga_jual: number;
+}
+
+export interface SandboxLog {
+  id: string;
+  tanggal: any;
+  catatan?: string;
+  total_item: number;
+  items: SandboxItem[];
+}
