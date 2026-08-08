@@ -4,6 +4,7 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  persistentSingleTabManager,
   memoryLocalCache,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -16,16 +17,27 @@ const app = initializeApp(firebaseConfig);
 
 
 // ---------------------------------------------------------------------------
-// Initialize Firestore with Multi-Tab IndexedDB persistence.
-// Falls back to in-memory cache if IndexedDB is unavailable (private mode,
-// storage-quota exceeded, second-tab lock contention, etc.) so the app always
-// boots instead of hanging forever on persistence initialization.
+// Deteksi apakah app berjalan sebagai PWA standalone
+// (installasi dari homescreen Android/iOS)
+// ---------------------------------------------------------------------------
+const isPWAStandalone =
+  window.matchMedia('(display-mode: standalone)').matches ||
+  (window.navigator as any).standalone === true;
+
+// ---------------------------------------------------------------------------
+// Initialize Firestore dengan strategi cache berbeda:
+// - Browser biasa  : multipleTabManager (full sync antar tab)
+// - PWA standalone : singleTabManager  (hindari BroadcastChannel crash di
+//                    beberapa Android WebView custom seperti XOS/MIUI)
+// - Fallback       : memoryLocalCache jika IndexedDB tidak tersedia
 // ---------------------------------------------------------------------------
 function createFirestore() {
   try {
     return initializeFirestore(app, {
       localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
+        tabManager: isPWAStandalone
+          ? persistentSingleTabManager({ forceOwnership: true })
+          : persistentMultipleTabManager(),
       }),
     });
   } catch (e) {

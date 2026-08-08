@@ -35,6 +35,7 @@ import {
   signOut,
   setPersistence,
   browserLocalPersistence,
+  inMemoryPersistence,
 } from 'firebase/auth';
 import { posService } from './services/posService';
 import { Barang, Transaksi, CartItem } from './types';
@@ -117,27 +118,43 @@ export default function App() {
     let unsub: () => void;
 
     // -----------------------------------------------------------------------
-    // FAILSAFE: if Firebase auth hangs for any reason (IndexedDB lock,
-    // network timeout, private-browsing storage block, etc.) we must still
-    // exit the loading screen. 8 s covers slow redirect result processing.
+    // FAILSAFE: jika Firebase auth hang (IndexedDB lock, network timeout,
+    // PWA storage block, dll) kita tetap keluar dari loading screen.
+    // 5s lebih singkat dari sebelumnya agar UX di PWA lebih responsif.
     // -----------------------------------------------------------------------
     const bootTimeout = setTimeout(() => {
       console.warn('[App] Auth init timed out — forcing loading=false.');
       setLoading(false);
-    }, 8000);
+    }, 5000);
+
+    // -----------------------------------------------------------------------
+    // Global safety net: tangkap unhandledrejection agar PWA tidak crash
+    // diam-diam tanpa menampilkan apapun ke user.
+    // -----------------------------------------------------------------------
+    const handleUnhandledRejection = (e: PromiseRejectionEvent) => {
+      console.error('[App] Unhandled promise rejection:', e.reason);
+      e.preventDefault();
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     async function initAuth() {
+      // Coba browserLocalPersistence dulu, fallback ke inMemoryPersistence
+      // jika storage di-block (mode privat, PWA storage policy, dll)
       try {
         await setPersistence(auth, browserLocalPersistence);
       } catch (err) {
-        console.error('Gagal nyimpen sesi login:', err);
-        // persistence gagal — tetap lanjut, sesi tidak akan bertahan hard-refresh
+        console.warn('[App] browserLocalPersistence gagal, fallback ke inMemory:', err);
+        try {
+          await setPersistence(auth, inMemoryPersistence);
+        } catch (memErr) {
+          console.error('[App] inMemoryPersistence juga gagal:', memErr);
+        }
       }
 
       // -----------------------------------------------------------------------
-      // PENTING: getRedirectResult() HARUS dipanggil SEBELUM onAuthStateChanged
-      // didaftarkan. Jika dipanggil bersamaan (race), di HP redirect flow bisa
-      // selesai tapi user state tidak ke-set dengan benar → stuck di login.
+      // getRedirectResult HARUS dipanggil SEBELUM onAuthStateChanged.
+      // Di PWA standalone mode, error yang mungkin muncul lebih beragam
+      // dari sekadar 'auth/no-auth-event' — kita tangkap semua dan lanjut.
       // -----------------------------------------------------------------------
       try {
         const result = await getRedirectResult(auth);
@@ -145,10 +162,17 @@ export default function App() {
           toast.success('Berhasil login', { id: 'global-pos-toast' });
         }
       } catch (redirectErr: any) {
-        // auth/no-auth-event = tidak ada redirect yg pending, aman diabaikan
-        if (redirectErr?.code !== 'auth/no-auth-event') {
+        // Kode-kode ini aman diabaikan — bukan error nyata, hanya
+        // sinyal bahwa tidak ada pending redirect
+        const ignoredCodes = [
+          'auth/no-auth-event',
+          'auth/null-user',
+          'auth/internal-error', // muncul di beberapa PWA standalone Android
+        ];
+        if (!ignoredCodes.includes(redirectErr?.code)) {
           console.error('[App] getRedirectResult error:', redirectErr);
-          toast.error('Gagal login, silakan coba lagi.', { id: 'global-pos-toast' });
+          // Jangan toast error di sini — user mungkin belum login sama sekali,
+          // bukan berarti ada masalah. Biarkan onAuthStateChanged yang handle.
         }
       }
 
@@ -160,12 +184,18 @@ export default function App() {
       });
     }
 
-    initAuth();
+    initAuth().catch(e => {
+      // Catch terakhir — jika initAuth() sendiri throw, jangan crash app
+      console.error('[App] initAuth fatal error:', e);
+      clearTimeout(bootTimeout);
+      setLoading(false);
+    });
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
     return () => {
       clearTimeout(bootTimeout);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       if (unsub) unsub();
       clearInterval(timer);
     };
