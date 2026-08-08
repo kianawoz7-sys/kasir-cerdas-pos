@@ -548,28 +548,7 @@ export default function App() {
   // Render — loading / unauthenticated guards
   // ---------------------------------------------------------------------------
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)' }}>
-      {/* Animated grid background */}
-      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(99,102,241,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-        className="flex flex-col items-center gap-5 relative z-10"
-      >
-        {/* Glowing logo */}
-        <div className="relative">
-          <div className="absolute inset-0 rounded-2xl blur-xl opacity-60" style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }} />
-          <div className="relative w-20 h-20 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-2xl" style={{ background: 'linear-gradient(135deg, #2563eb, #4f46e5)' }}>K</div>
-        </div>
-        {/* Spinner ring */}
-        <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-blue-400 animate-spin" />
-        <div className="text-center">
-          <p className="text-white font-black text-lg tracking-widest uppercase">Kasir Cerdas</p>
-          <p className="text-blue-300/70 text-xs font-medium tracking-widest mt-1">Memuat sistem...</p>
-        </div>
-      </motion.div>
-    </div>
+    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }} />
   );
 
   if (!user) return (
